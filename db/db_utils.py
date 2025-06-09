@@ -70,8 +70,13 @@ def update_position(position_id, **kwargs):
 @st.cache_data(ttl=60, show_spinner=False)
 def load_positions():
     conn = get_st_connection()
-    # Comment out the rest to avoid crash
-    return []
+    with conn.session as session:
+        result = session.execute(
+            text("SELECT id, ticker, trade_type, position_type, entry_price, quantity, entry_time, notes FROM positions WHERE position_type != 'CLOSE'")
+        )
+        rows = result.fetchall()
+        columns = ["id", "ticker", "trade_type", "position_type", "entry_price", "quantity", "entry_time", "notes"]
+        return [dict(zip(columns, row)) for row in rows]
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_closed_positions():
