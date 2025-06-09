@@ -61,6 +61,18 @@ def option_trades_ui():
             df_closed = df_closed.sort_values("entry_time")
         st.markdown(df_closed.to_html(escape=False, index=False), unsafe_allow_html=True)
     else:
+        st.write("No closed option trades.")
+
+    # Add Option Trade
+    st.header("Add New Option Trade")
+    with st.form("add_option_trade"):
+        ticker = st.text_input("Ticker")
+        platform = st.selectbox("Platform", list(PLATFORM_CACHE.keys()))
+        strategy = st.selectbox("Option Strategy", [
+            "call", "put", "cash secured put", "covered call", "straddle", "strangle", "vertical spread", "other"
+        ])
+        strike_price = st.number_input("Strike Price", min_value=0.0, format="%.2f")
+        expiry_date = st.date_input("Expiry Date")
         trade_date = st.date_input("Trade Date", value=datetime.date.today())
         transaction_type = st.selectbox("Transaction Type", ["credit", "debit"])
         option_open_price = st.number_input("Option Open Price", min_value=0.0, format="%.2f")
