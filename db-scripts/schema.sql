@@ -16,7 +16,7 @@ CREATE TABLE trades (
 CREATE TABLE IF NOT EXISTS positions (
     id SERIAL PRIMARY KEY,
     ticker TEXT NOT NULL,
-    trade_type TEXT NOT NULL,
+    trade_type TEXT,
     position_type TEXT NOT NULL, -- e.g., LONG, SHORT, FLAT
     entry_price REAL,
     quantity REAL,

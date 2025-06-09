@@ -1,6 +1,7 @@
 import streamlit as st
 from db.db_utils import load_positions, insert_position, update_position, load_closed_positions
 import datetime
+import pandas as pd
 
 def positions_ui():
     st.title("Positions Manager")
@@ -14,10 +15,40 @@ def positions_ui():
         total_profit_loss = sum(p.get("profit_loss", 0.0) or 0.0 for p in closed_positions)
     st.subheader(f"Total Profit/Loss (Closed Trades): {total_profit_loss:.2f}")
 
-    from utils.ui_helpers import render_table
-    render_table(positions, title="Current Positions")
+    def _format_gain(x):
+        color = "green" if x and x > 0 else "red"
+        return f'<span style="color: {color}">{x:.2f}</span>' if x is not None else ""
+
+    # Open Positions Table
+    if positions:
+        st.subheader("Current Positions")
+        df = pd.DataFrame(positions)
+        if "profit_loss" in df.columns:
+            df["profit_loss"] = df["profit_loss"].apply(_format_gain)
+        if "id" in df.columns:
+            df = df.drop(columns=["id"])
+        if "entry_time" in df.columns:
+            df = df.sort_values("entry_time")
+        st.markdown(df.to_html(escape=False, index=False), unsafe_allow_html=True)
+    else:
+        st.subheader("Current Positions")
+        st.write("No data found.")
+
+    # Closed Positions Table
     closed_positions = load_closed_positions()
-    render_table(closed_positions, title="Closed Trades")
+    if closed_positions:
+        st.subheader("Closed Trades")
+        df_closed = pd.DataFrame(closed_positions)
+        if "profit_loss" in df_closed.columns:
+            df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
+        if "id" in df_closed.columns:
+            df_closed = df_closed.drop(columns=["id"])
+        if "entry_time" in df_closed.columns:
+            df_closed = df_closed.sort_values("entry_time")
+        st.markdown(df_closed.to_html(escape=False, index=False), unsafe_allow_html=True)
+    else:
+        st.subheader("Closed Trades")
+        st.write("No data found.")
 
     st.header("Add New Position")
     with st.form("add_position"):
