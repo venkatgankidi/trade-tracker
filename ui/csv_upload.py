@@ -25,12 +25,11 @@ def upload_csv():
                     for row in rows:
                         row["platform_id"] = row.get("platform_id") if platform_type == "OTHER" else PLATFORM_CACHE.get(platform_type)
                         columns = list(row.keys())
-                        values = [row[col] for col in columns]
-                        placeholders = ", ".join(["%s"] * len(columns))
+                        placeholders = ", ".join([f":{col}" for col in columns])
                         sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
                         with conn.session as session:
-                            session.execute(sql, values)
-                    print("Mapped Rows:", rows)  # Debugging line to check mapped rows
+                            session.execute(sql, row)
+                            session.commit()
                     st.success("Trades uploaded successfully!")
             except Exception as e:
                 st.error(f"Error uploading trades: {e}")

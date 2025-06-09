@@ -46,6 +46,7 @@ def insert_position(ticker, trade_type, position_type, entry_price, quantity, en
                 "notes": notes,
             }
         )
+        session.commit()
     st.cache_data.clear()
 
 def update_position(position_id, **kwargs):
@@ -63,6 +64,7 @@ def update_position(position_id, **kwargs):
             f"UPDATE positions SET {', '.join(columns)} WHERE id = %s",
             values
         )
+        session.commit()
     st.cache_data.clear()
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -100,6 +102,7 @@ def insert_option_trade(ticker, platform_id, strategy, strike_price, expiry_date
                 "notes": notes,
             }
         )
+        session.commit()
     st.cache_data.clear()
 
 def update_option_trade(trade_id, **kwargs):
@@ -117,6 +120,7 @@ def update_option_trade(trade_id, **kwargs):
             text(f"UPDATE option_trades SET {', '.join(columns)} WHERE id = :trade_id"),
             {**dict(zip([col.split(' = ')[0] for col in columns], values[:-1])), "trade_id": values[-1]}
         )
+        session.commit()
     st.cache_data.clear()
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -157,4 +161,5 @@ def close_option_trade(trade_id, status, close_date, option_close_price):
                 "trade_id": trade_id,
             }
         )
+        session.commit()
     st.cache_data.clear()

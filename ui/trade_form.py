@@ -31,6 +31,7 @@ def trade_form():
                 sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
                 with conn.session as session:
                     session.execute(sql, values)
+                    session.commit()
                 st.success("Trade added successfully!")
             except Exception as e:
                 st.error(f"Error adding trade: {e}")
