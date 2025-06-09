@@ -52,17 +52,17 @@ def insert_position(ticker, trade_type, position_type, entry_price, quantity, en
 def update_position(position_id, **kwargs):
     conn = get_st_connection()
     columns = []
-    values = []
+    params = {}
     for key, value in kwargs.items():
-        columns.append(f"{key} = %s")
-        values.append(value)
+        columns.append(f"{key} = :{key}")
+        params[key] = value
     if not columns:
         return
-    values.append(position_id)
+    params["position_id"] = position_id
     with conn.session as session:
         session.execute(
-            f"UPDATE positions SET {', '.join(columns)} WHERE id = %s",
-            values
+            text(f"UPDATE positions SET {', '.join(columns)} WHERE id = :position_id"),
+            params
         )
         session.commit()
     st.cache_data.clear()
