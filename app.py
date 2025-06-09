@@ -5,6 +5,7 @@ from ui.positions_ui import positions_ui
 from ui.option_trades_ui import option_trades_ui
 from ui.dca_manager import dca_manager
 from ui.dashboard import dashboard
+from ui.taxes_ui import taxes_ui
 
 st.set_page_config(page_title="Portfolio Tracker", layout="wide")
 
@@ -12,7 +13,8 @@ NAVIGATION = {
     "Dashboard": "📊 Dashboard",
     "DCA Manager": "📈 DCA Manager",
     "Positions Manager": "📒 Positions Manager",
-    "Option Trades Manager": "📑 Option Trades Manager"
+    "Option Trades Manager": "📑 Option Trades Manager",
+    "Taxes": "💰 Taxes"
 }
 
 # Credentials are now loaded from Streamlit secrets for better security.
@@ -64,6 +66,8 @@ def main():
         positions_ui()
     elif page == "Option Trades Manager":
         option_trades_ui()
+    elif page == "Taxes":
+        taxes_ui()
 
 if __name__ == "__main__":
     main()
