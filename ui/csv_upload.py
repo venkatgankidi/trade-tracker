@@ -3,6 +3,7 @@ import csv
 import json
 import time
 import tempfile
+from sqlalchemy import text
 
 def upload_csv():
     from db.db_utils import PLATFORM_CACHE
@@ -26,7 +27,7 @@ def upload_csv():
                         columns = list(row.keys())
                         values = [row[col] for col in columns]
                         placeholders = ", ".join(["%s"] * len(columns))
-                        sql = f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})"
+                        sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
                         with conn.session as session:
                             session.execute(sql, values)
                     print("Mapped Rows:", rows)  # Debugging line to check mapped rows

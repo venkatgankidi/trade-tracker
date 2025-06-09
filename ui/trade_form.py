@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 from db.db_utils import PLATFORM_CACHE
+from sqlalchemy import text
 
 def trade_form():
     with st.form("trade_form"):
@@ -27,7 +28,7 @@ def trade_form():
                 columns = list(trade_data.keys())
                 values = [trade_data[col] for col in columns]
                 placeholders = ", ".join(["%s"] * len(columns))
-                sql = f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})"
+                sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
                 with conn.session as session:
                     session.execute(sql, values)
                 st.success("Trade added successfully!")
