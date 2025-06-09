@@ -28,7 +28,7 @@ def trade_form():
                 values = [trade_data[col] for col in columns]
                 placeholders = ", ".join(["%s"] * len(columns))
                 sql = f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})"
-                with conn.session() as session:
+                with conn.session as session:
                     session.execute(sql, values)
                 st.success("Trade added successfully!")
             except Exception as e:

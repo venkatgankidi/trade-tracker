@@ -27,7 +27,7 @@ def upload_csv():
                         values = [row[col] for col in columns]
                         placeholders = ", ".join(["%s"] * len(columns))
                         sql = f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})"
-                        with conn.session() as session:
+                        with conn.session as session:
                             session.execute(sql, values)
                     print("Mapped Rows:", rows)  # Debugging line to check mapped rows
                     st.success("Trades uploaded successfully!")
