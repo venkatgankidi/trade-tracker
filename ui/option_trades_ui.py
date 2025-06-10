@@ -2,19 +2,25 @@ import streamlit as st
 from db.db_utils import PLATFORM_CACHE, insert_option_trade, load_option_trades, close_option_trade
 import datetime
 import pandas as pd
+from typing import Optional
 
-def get_option_trades_summary():
+def get_option_trades_summary() -> pd.DataFrame:
+    """
+    Returns a summary DataFrame for option trades (open/closed count and total P/L).
+    """
     open_trades = load_option_trades(status="open")
     closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised")
     total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
-    import pandas as pd
     return pd.DataFrame([{
         "Open Option Trades": len(open_trades),
         "Closed Option Trades": len(closed_trades),
         "Total Option P/L (Closed)": round(total_pnl, 2)
     }])
 
-def option_trades_ui():
+def option_trades_ui() -> None:
+    """
+    Streamlit UI for managing option trades. Includes summary, open/closed tables, and add/close forms.
+    """
     st.title("Option Trades Manager")
 
     # Total Profit/Loss for Closed Option Trades
@@ -27,7 +33,7 @@ def option_trades_ui():
     open_trades = load_option_trades(status="open")
 
 
-    def _format_gain(x):
+    def _format_gain(x: Optional[float]) -> str:
         color = "green" if x and x > 0 else "red"
         return f'<span style="color: {color}">{x:.2f}</span>' if x is not None else ""
 
@@ -95,18 +101,23 @@ def option_trades_ui():
         notes = st.text_area("Notes (optional)")
         submitted = st.form_submit_button("Add Option Trade")
         if submitted:
-            insert_option_trade(
-                ticker,
-                PLATFORM_CACHE.get(platform),
-                strategy,
-                strike_price,
-                expiry_date,
-                trade_date,
-                transaction_type,
-                option_open_price,
-                notes
-            )
-            st.success("Option trade added. Please refresh to see the update.")
-            import time
-            time.sleep(2)
-            st.rerun()
+            if not ticker.strip():
+                st.warning("Ticker cannot be empty.")
+            elif strike_price <= 0 or option_open_price <= 0:
+                st.warning("Strike price and open price must be greater than zero.")
+            else:
+                insert_option_trade(
+                    ticker.strip().upper(),
+                    PLATFORM_CACHE.get(platform),
+                    strategy,
+                    strike_price,
+                    expiry_date,
+                    trade_date,
+                    transaction_type,
+                    option_open_price,
+                    notes
+                )
+                st.success("Option trade added. Please refresh to see the update.")
+                import time
+                time.sleep(2)
+                st.rerun()

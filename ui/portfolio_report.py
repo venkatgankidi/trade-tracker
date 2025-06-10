@@ -3,8 +3,12 @@ import pandas as pd
 import yfinance as yf
 from db.db_utils import PLATFORM_CACHE
 from sqlalchemy import text
+from typing import Optional
 
-def _get_portfolio_df():
+def _get_portfolio_df() -> pd.DataFrame:
+    """
+    Returns a DataFrame with portfolio holdings, including current price and unrealized gain/loss.
+    """
     conn = st.connection("postgresql", type="sql")
     query = """
 SELECT platforms.name AS platform,
@@ -26,7 +30,7 @@ GROUP BY platforms.name, ticker
             portfolio_df[col] = portfolio_df[col].astype(float)
     portfolio_df = portfolio_df[portfolio_df["total_quantity"] > 0]
 
-    def fetch_current_price(ticker):
+    def fetch_current_price(ticker: str) -> Optional[float]:
         try:
             price = yf.Ticker(ticker).history(period="1d", interval="1m")["Close"].iloc[-1]
             return price
@@ -39,7 +43,10 @@ GROUP BY platforms.name, ticker
     portfolio_df["percent_profit_loss"] = (portfolio_df["unrealized_gain"] / portfolio_df["trade_cost"]) * 100
     return portfolio_df
 
-def get_position_summary():
+def get_position_summary() -> pd.DataFrame:
+    """
+    Returns a summary DataFrame for each platform (investment, value, unrealized gain).
+    """
     portfolio_df = _get_portfolio_df()
     rows = []
     for platform in PLATFORM_CACHE.keys():
@@ -58,15 +65,18 @@ def get_position_summary():
             })
     return pd.DataFrame(rows)
 
-def _format_gain(x):
+def _format_gain(x: float) -> str:
     color = "green" if x > 0 else "red"
     return f'<span style="color: {color}">{x:.2f}</span>'
 
-def _format_percent(x):
+def _format_percent(x: float) -> str:
     color = "green" if x > 0 else "red"
     return f'<span style="color: {color}">{x:.2f}%</span>'
 
-def portfolio_report():
+def portfolio_report() -> None:
+    """
+    Streamlit UI for portfolio summary and holdings, with formatted output and error handling.
+    """
     st.subheader("Portfolio Summary")
     summary_df = get_position_summary()
     if not summary_df.empty:

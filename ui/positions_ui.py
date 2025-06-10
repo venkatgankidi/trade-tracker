@@ -2,8 +2,12 @@ import streamlit as st
 from db.db_utils import load_positions, insert_position, update_position, load_closed_positions
 import datetime
 import pandas as pd
+from typing import Optional
 
-def get_positions_manager_summary():
+def get_positions_manager_summary() -> pd.DataFrame:
+    """
+    Returns a summary DataFrame for open/closed positions and total P/L.
+    """
     open_positions = load_positions()
     closed_positions = load_closed_positions()
     total_pnl = sum(p.get("profit_loss", 0.0) or 0.0 for p in closed_positions)
@@ -13,7 +17,10 @@ def get_positions_manager_summary():
         "Total P/L (Closed)": round(total_pnl, 2)
     }])
 
-def positions_ui():
+def positions_ui() -> None:
+    """
+    Streamlit UI for managing positions. Includes summary, open/closed tables, add/update/close forms.
+    """
     st.title("Positions Manager")
 
     positions = load_positions()
@@ -25,7 +32,7 @@ def positions_ui():
         total_profit_loss = sum(p.get("profit_loss", 0.0) or 0.0 for p in closed_positions)
     st.subheader(f"Total Profit/Loss (Closed Trades): {total_profit_loss:.2f}")
 
-    def _format_gain(x):
+    def _format_gain(x: Optional[float]) -> str:
         color = "green" if x and x > 0 else "red"
         return f'<span style="color: {color}">{x:.2f}</span>' if x is not None else ""
 
@@ -70,9 +77,13 @@ def positions_ui():
         notes = st.text_area("Notes", value="")
         submitted = st.form_submit_button("Add Position")
         if submitted:
-            insert_position(ticker, None, position_type, entry_price, quantity, entry_time, notes)
-            from utils.ui_helpers import show_success
-            show_success("Position added. Please refresh to see the update.")
+            if not ticker.strip():
+                st.warning("Ticker cannot be empty.")
+            elif entry_price <= 0 or quantity <= 0:
+                st.warning("Entry price and quantity must be greater than zero.")
+            else:
+                insert_position(ticker.strip().upper(), None, position_type, entry_price, quantity, entry_time, notes)
+                st.success("Position added. Please refresh to see the update.")
 
     st.header("Update/Close Position")
     if positions:
@@ -91,14 +102,19 @@ def positions_ui():
                 update_btn = st.form_submit_button("Update Position")
                 close_btn = st.form_submit_button("Close (Delete) Position")
                 if update_btn:
-                    update_position(pos_id, position_type=new_position_type, entry_price=new_entry_price, quantity=new_quantity, notes=new_notes)
-                    from utils.ui_helpers import show_success
-                    show_success("Position updated. Please refresh to see the update.")
+                    if new_entry_price <= 0 or new_quantity <= 0:
+                        st.warning("Entry price and quantity must be greater than zero.")
+                    else:
+                        update_position(pos_id, position_type=new_position_type, entry_price=new_entry_price, quantity=new_quantity, notes=new_notes)
+                        st.success("Position updated. Please refresh to see the update.")
                 if close_btn:
                     close_dialog(ticker=selected["ticker"], pos_id=pos_id)
 
 @st.dialog("Close Position")
-def close_dialog(ticker, pos_id):
+def close_dialog(ticker: str, pos_id: int) -> None:
+    """
+    Dialog for closing a position. Validates input and updates the position as closed.
+    """
     with st.form("close_position"):
         st.header("Close Position")
         st.write(f"Closing position for {ticker}")
@@ -106,15 +122,15 @@ def close_dialog(ticker, pos_id):
         exit_time = st.text_input("Exit Time", value=None, placeholder="YYYY-MM-DD HH:MM:SS", key=f"dialog_exit_time_{pos_id}")
         confirm = st.form_submit_button("Confirm Close")
         if confirm:
-            # Fetch entry_price, quantity, entry_time for profit/loss and trade_type calculation
+            if exit_price <= 0:
+                st.warning("Exit price must be greater than zero.")
+                return
             from db.db_utils import load_positions
             open_positions = load_positions()
             pos = next((p for p in open_positions if p["id"] == pos_id), None)
             entry_price = pos["entry_price"] if pos else 0.0
             quantity = pos["quantity"] if pos else 0.0
             entry_time = pos["entry_time"] if pos else None
-
-            # Determine trade_type based on entry_time and exit_time
             trade_type = "swing"
             try:
                 if entry_time and exit_time:
@@ -124,10 +140,7 @@ def close_dialog(ticker, pos_id):
                         trade_type = "day"
             except Exception:
                 pass
-
             profit_loss = (exit_price - entry_price) * quantity
             update_position(pos_id, position_type="CLOSE", exit_price=exit_price, exit_time=exit_time, profit_loss=profit_loss, trade_type=trade_type)
-            from utils.ui_helpers import show_success
-            show_success(f"Position {pos_id} closed successfully. Profit/Loss: {profit_loss:.2f} (Trade Type: {trade_type})")
+            st.success(f"Position {pos_id} closed successfully. Profit/Loss: {profit_loss:.2f} (Trade Type: {trade_type})")
 
-# Standalone execution removed; use app.py as the entry point.
