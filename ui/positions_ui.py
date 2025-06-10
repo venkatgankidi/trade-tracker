@@ -3,6 +3,16 @@ from db.db_utils import load_positions, insert_position, update_position, load_c
 import datetime
 import pandas as pd
 
+def get_positions_manager_summary():
+    open_positions = load_positions()
+    closed_positions = load_closed_positions()
+    total_pnl = sum(p.get("profit_loss", 0.0) or 0.0 for p in closed_positions)
+    return pd.DataFrame([{
+        "Open Positions": len(open_positions),
+        "Closed Positions": len(closed_positions),
+        "Total P/L (Closed)": round(total_pnl, 2)
+    }])
+
 def positions_ui():
     st.title("Positions Manager")
 

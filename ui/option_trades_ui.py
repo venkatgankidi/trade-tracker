@@ -3,8 +3,24 @@ from db.db_utils import PLATFORM_CACHE, insert_option_trade, load_option_trades,
 import datetime
 import pandas as pd
 
+def get_option_trades_summary():
+    open_trades = load_option_trades(status="open")
+    closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised")
+    total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
+    import pandas as pd
+    return pd.DataFrame([{
+        "Open Option Trades": len(open_trades),
+        "Closed Option Trades": len(closed_trades),
+        "Total Option P/L (Closed)": round(total_pnl, 2)
+    }])
+
 def option_trades_ui():
     st.title("Option Trades Manager")
+
+    # Total Profit/Loss for Closed Option Trades
+    closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised")
+    total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
+    st.subheader(f"Total Profit/Loss (Closed Option Trades): {total_pnl:.2f}")
 
     # Open Option Trades Table
     st.header("Open Option Trades")

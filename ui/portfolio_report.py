@@ -39,21 +39,24 @@ GROUP BY platforms.name, ticker
     portfolio_df["percent_profit_loss"] = (portfolio_df["unrealized_gain"] / portfolio_df["trade_cost"]) * 100
     return portfolio_df
 
-def portfolio_summary():
-    st.subheader("Portfolio Summary")
+def get_position_summary():
     portfolio_df = _get_portfolio_df()
+    rows = []
     for platform in PLATFORM_CACHE.keys():
         group = portfolio_df[portfolio_df["platform"] == platform]
         if not group.empty:
-            st.write(f"Platform: {platform}")
-            total_investment = group["trade_cost"].sum() 
+            total_investment = group["trade_cost"].sum()
             total_portfolio_value = group["current_value"].sum()
             total_unrealized_gain = group["unrealized_gain"].sum()
-            st.write(f"  Total Investment: ${total_investment:.2f}")
-            st.write(f"  Total Portfolio Value: ${total_portfolio_value:.2f}")
-            st.write(f"  Total Unrealized Gains: ${total_unrealized_gain:.2f}")
             percent_unrealized = (total_unrealized_gain / total_investment * 100) if total_investment else 0.0
-            st.write(f"  Pct Unrealized Gain: {percent_unrealized:.2f}%")
+            rows.append({
+                "Platform": platform,
+                "Total Investment": round(total_investment, 2),
+                "Total Portfolio Value": round(total_portfolio_value, 2),
+                "Total Unrealized Gains": round(total_unrealized_gain, 2),
+                "Pct Unrealized Gain": f"{round(percent_unrealized, 2)}%"
+            })
+    return pd.DataFrame(rows)
 
 def _format_gain(x):
     color = "green" if x > 0 else "red"
@@ -64,8 +67,13 @@ def _format_percent(x):
     return f'<span style="color: {color}">{x:.2f}%</span>'
 
 def portfolio_report():
+    st.subheader("Portfolio Summary")
+    summary_df = get_position_summary()
+    if not summary_df.empty:
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No positions found for summary.")
     portfolio_df = _get_portfolio_df()
-    portfolio_summary()
     st.subheader("Portfolio Holdings")
     for platform, group_df in portfolio_df.groupby("platform"):
         st.write(f"Platform: {platform}")

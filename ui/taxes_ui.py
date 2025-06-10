@@ -1,36 +1,30 @@
 import streamlit as st
+import pandas as pd
 import datetime
 from db.db_utils import load_closed_positions, load_option_trades
 
-def taxes_ui():
-    import pandas as pd
-    st.title("Capital Gains & Losses by Tax Year")
+LONG_TERM_TAX_RATE = 0.15
+SHORT_TERM_TAX_RATE = 0.24
 
-    # Tax rates (can be adjusted)
-    LONG_TERM_TAX_RATE = 0.15
-    SHORT_TERM_TAX_RATE = 0.24
+def parse_date(dt):
+    if isinstance(dt, str):
+        try:
+            return datetime.datetime.fromisoformat(dt)
+        except Exception:
+            return None
+    elif isinstance(dt, datetime.date):
+        return datetime.datetime.combine(dt, datetime.time())
+    elif isinstance(dt, datetime.datetime):
+        return dt
+    return None
 
-    # Load closed positions and option trades
+def aggregate_gains():
     closed_positions = load_closed_positions()
-    closed_options = load_option_trades(status="closed")  # Adjust status if needed
-
-    # Helper to parse date
-    def parse_date(dt):
-        if isinstance(dt, str):
-            try:
-                return datetime.datetime.fromisoformat(dt)
-            except Exception:
-                return None
-        elif isinstance(dt, datetime.date):
-            return datetime.datetime.combine(dt, datetime.time())
-        elif isinstance(dt, datetime.datetime):
-            return dt
-        return None
-
-    # Aggregate by year, asset type, and term
+    closed_options = load_option_trades(status="closed")
     yearly = {}
+    yearly_breakdown = {}
 
-    # Process closed positions (Stocks)
+    # Stocks
     for pos in closed_positions:
         entry_time = parse_date(pos.get("entry_time"))
         exit_time = parse_date(pos.get("exit_time"))
@@ -47,11 +41,18 @@ def taxes_ui():
         else:
             gain = (exit_price - entry_price) * quantity
         term = "Long Term" if holding_period > 365 else "Short Term"
-        asset = "Stock"
-        yearly.setdefault((year, asset, term), 0)
-        yearly[(year, asset, term)] += gain
+        tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
 
-    # Process closed option trades (Options)
+        # For summary
+        yearly.setdefault(year, {"gain": 0, "tax": 0})
+        yearly[year]["gain"] += gain
+        yearly[year]["tax"] += gain * tax_rate
+
+        # For breakdown
+        yearly_breakdown.setdefault((year, "Stock", term), 0)
+        yearly_breakdown[(year, "Stock", term)] += gain
+
+    # Options
     for opt in closed_options:
         trade_date = parse_date(opt.get("trade_date") or opt.get("entry_time"))
         close_date = parse_date(opt.get("close_date") or opt.get("exit_time"))
@@ -61,15 +62,51 @@ def taxes_ui():
         year = close_date.year
         holding_period = (close_date - trade_date).days
         term = "Long Term" if holding_period > 365 else "Short Term"
-        asset = "Option"
-        yearly.setdefault((year, asset, term), 0)
-        yearly[(year, asset, term)] += profit_loss
+        tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
 
-    # Prepare DataFrame for display
+        # For summary
+        yearly.setdefault(year, {"gain": 0, "tax": 0})
+        yearly[year]["gain"] += profit_loss
+        yearly[year]["tax"] += profit_loss * tax_rate
+
+        # For breakdown
+        yearly_breakdown.setdefault((year, "Option", term), 0)
+        yearly_breakdown[(year, "Option", term)] += profit_loss
+
+    return yearly, yearly_breakdown
+
+def tax_summary():
+    yearly, _ = aggregate_gains()
     if yearly:
         rows = []
-        for (year, asset, term) in sorted(yearly):
-            gain = yearly[(year, asset, term)]
+        for year in sorted(yearly):
+            rows.append({
+                "Tax Year": year,
+                "Total Gain/Loss": round(yearly[year]["gain"], 2),
+                "Total Estimated Tax": round(yearly[year]["tax"], 2)
+            })
+        return pd.DataFrame(rows)
+    else:
+        return pd.DataFrame(columns=["Tax Year", "Total Gain/Loss", "Total Estimated Tax"])
+
+def taxes_ui():
+    st.title("Capital Gains & Losses by Tax Year")
+    _,yearly_breakdown = aggregate_gains()
+
+        # Also show summary without breakdown
+    summary_df = tax_summary()
+    if not summary_df.empty:
+        st.subheader("Tax Summary by Year")
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No closed trades found for tax summary.")  
+    st.write("---")
+
+    # Prepare breakdown DataFrame
+    if yearly_breakdown:
+        rows = []
+        for (year, asset, term) in sorted(yearly_breakdown):
+            gain = yearly_breakdown[(year, asset, term)]
             tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
             tax = gain * tax_rate
             rows.append({
@@ -82,6 +119,6 @@ def taxes_ui():
             })
         df = pd.DataFrame(rows)
         st.subheader("Summary by Tax Year, Asset, and Term")
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.info("No closed trades found for capital gains calculation.")

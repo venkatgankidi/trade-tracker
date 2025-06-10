@@ -1,30 +1,44 @@
 import streamlit as st
-from db.db_utils import load_positions, load_closed_positions, load_option_trades
+from ui.positions_ui import get_positions_manager_summary
+from ui.portfolio_report import get_position_summary
+from ui.option_trades_ui import get_option_trades_summary
+from ui.taxes_ui import tax_summary
 
 def dashboard():
     st.header("Dashboard")
 
     # Positions summary
     st.subheader("Positions Manager Summary")
-    open_positions = load_positions()
-    closed_positions = load_closed_positions()
-    st.write(f"Open Positions: {len(open_positions)}")
-    st.write(f"Closed Positions: {len(closed_positions)}")
-    total_pnl = sum(p.get("profit_loss", 0.0) or 0.0 for p in closed_positions)
-    st.write(f"Total P/L (Closed): {total_pnl:.2f}")
+    pos_mgr_df = get_positions_manager_summary()
+    if not pos_mgr_df.empty:
+        st.dataframe(pos_mgr_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No positions found for summary.")
     st.write("---")
 
-    # DCA Manager summary (reuse portfolio_report logic)
-    st.subheader("DCA Manager Summary")
-    from ui.portfolio_report import portfolio_summary
-    portfolio_summary()
+    # Portfolio Summary
+    st.subheader("Portfolio Summary")
+    summary_df = get_position_summary()
+    if not summary_df.empty:
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No positions found for summary.")
     st.write("---")
 
     # Option Trades summary
     st.subheader("Option Trades Manager Summary")
-    open_options = load_option_trades(status="open")
-    closed_options = load_option_trades(status="expired") + load_option_trades(status="exercised")
-    st.write(f"Open Option Trades: {len(open_options)}")
-    st.write(f"Closed Option Trades: {len(closed_options)}")
-    total_option_pnl = sum(o.get("profit_loss", 0.0) or 0.0 for o in closed_options)
-    st.write(f"Total Option P/L (Closed): {total_option_pnl:.2f}")
+
+    opt_df = get_option_trades_summary()
+    if not opt_df.empty:
+        st.dataframe(opt_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No option trades found for summary.")
+    st.write("---")
+
+    # Tax Summary (Yearly, no breakdown)
+    st.subheader("Tax Summary by Year")
+    summary_df = tax_summary()
+    if not summary_df.empty:
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No closed trades found for tax summary.")
