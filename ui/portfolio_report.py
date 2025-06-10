@@ -25,7 +25,15 @@ GROUP BY platforms.name, ticker
         if col in portfolio_df.columns:
             portfolio_df[col] = portfolio_df[col].astype(float)
     portfolio_df = portfolio_df[portfolio_df["total_quantity"] > 0]
-    portfolio_df["current_price"] = portfolio_df["ticker"].apply(lambda x: yf.Ticker(x).history(period="1d",interval = "1m")["Close"].iloc[-1])
+
+    def fetch_current_price(ticker):
+        try:
+            price = yf.Ticker(ticker).history(period="1d", interval="1m")["Close"].iloc[-1]
+            return price
+        except Exception:
+            return None
+
+    portfolio_df["current_price"] = portfolio_df["ticker"].apply(fetch_current_price)
     portfolio_df["current_value"] = portfolio_df["current_price"] * portfolio_df["total_quantity"]
     portfolio_df["unrealized_gain"] = portfolio_df["current_value"] - portfolio_df["trade_cost"]
     portfolio_df["percent_profit_loss"] = (portfolio_df["unrealized_gain"] / portfolio_df["trade_cost"]) * 100
@@ -64,6 +72,19 @@ def portfolio_report():
         display_df = group_df.copy()
         display_df = display_df.sort_values("ticker")
         display_df = display_df.drop(columns=["platform"])
-        display_df["unrealized_gain"] = display_df["unrealized_gain"].apply(_format_gain)
-        display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(_format_percent)
+
+        # Show "Not available" for tickers with missing price
+        display_df["current_price"] = display_df["current_price"].apply(
+            lambda x: f'<span style="color: red">Not available</span>' if pd.isna(x) else f"${x:.2f}"
+        )
+        display_df["current_value"] = display_df.apply(
+            lambda row: f'<span style="color: red">Not available</span>' if pd.isna(row["current_price"]) or row["current_price"] == '<span style="color: red">Not available</span>' else f"${row['current_value']:.2f}", axis=1
+        )
+        display_df["unrealized_gain"] = display_df.apply(
+            lambda row: '<span style="color: red">Not available</span>' if "Not available" in str(row["current_value"]) else _format_gain(row["unrealized_gain"]), axis=1
+        )
+        display_df["percent_profit_loss"] = display_df.apply(
+            lambda row: '<span style="color: red">Not available</span>' if "Not available" in str(row["current_value"]) else _format_percent(row["percent_profit_loss"]), axis=1
+        )
+
         st.markdown(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
