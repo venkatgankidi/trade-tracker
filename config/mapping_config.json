@@ -1,6 +1,18 @@
 {
-  "ROBINHOOD":{},
-  "FIDELITY":{},
+  "ROBINHOOD":{
+    "ticker": "ticker",
+    "price":"price",
+    "quantity":"quantity",
+    "date":"date",
+    "trade_type":"trade_type"
+  },
+  "FIDELITY":{    
+    "ticker": "ticker",
+    "price":"price",
+    "quantity":"quantity",
+    "date":"date",
+    "trade_type":"trade_type"
+  },
   "WEBULL-DCA": {
     "Symbol": "ticker",
     "Avg Price":"price",
@@ -16,5 +28,11 @@
     "trade_type":"trade_type",
     "platform_id":"platform_id"
   },
-  "WEBULL":{}
+  "WEBULL":{
+    "Symbol": "ticker",
+    "Avg Price":"price",
+    "Total Qty":"quantity",
+    "Filled Time":"date",
+    "Side":"trade_type"
+  }
 }

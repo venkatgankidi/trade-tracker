@@ -3,25 +3,25 @@ from collections.abc import Mapping
 from db.db_utils import load_platforms
 from ui.positions_ui import positions_ui
 from ui.option_trades_ui import option_trades_ui
-from ui.dca_manager import dca_manager
+from ui.portfolio_report import portfolio_ui
+from ui.data_entry import data_entry
 from ui.dashboard import dashboard
 from ui.taxes_ui import taxes_ui
 
 st.set_page_config(page_title="Portfolio Tracker", layout="wide")
 
 NAVIGATION = {
-    "Dashboard": "📊 Dashboard",
-    "DCA Manager": "📈 DCA Manager",
-    "Positions Manager": "📒 Positions Manager",
-    "Option Trades Manager": "📑 Option Trades Manager",
-    "Taxes": "💰 Taxes"
+    "Dashboard": "\U0001F4CA Dashboard",
+    "Portfolio": "\U0001F4BC Portfolio",
+    "Positions": "\U0001F4D2 Positions",
+    "Option Trades": "\U0001F4D1 Option Trades",
+    "Taxes": "\U0001F4B0 Taxes",
+    "Data Entry": "\U0001F4DD Data Entry"
 }
 
-# Credentials are now loaded from Streamlit secrets for better security.
 USERNAME = st.secrets.get("auth_username")
 PASSWORD = st.secrets.get("auth_password")
 
-# Ensure that the secrets are set in the Streamlit secrets.toml file
 if not USERNAME or not PASSWORD:
     st.error("Authentication credentials are not set. Please configure them in the Streamlit secrets.toml file.")
     st.stop()
@@ -43,7 +43,6 @@ def main():
                 st.error("Invalid username or password")
         return
 
-    # Sidebar and main app
     with st.sidebar:
         st.markdown(f"**User:** {USERNAME}")
         if st.button("Logout"):
@@ -58,16 +57,20 @@ def main():
         format_func=lambda x: NAVIGATION[x]
     )
 
-    if page == "Dashboard":
-        dashboard()
-    elif page == "DCA Manager":
-        dca_manager()
-    elif page == "Positions Manager":
-        positions_ui()
-    elif page == "Option Trades Manager":
-        option_trades_ui()
-    elif page == "Taxes":
-        taxes_ui()
+    # Show spinner while loading new page content
+    with st.spinner("Loading page..."):
+        if page == "Dashboard":
+            dashboard()
+        elif page == "Portfolio":
+            portfolio_ui()
+        elif page == "Positions":
+            positions_ui()
+        elif page == "Option Trades":
+            option_trades_ui()
+        elif page == "Taxes":
+            taxes_ui()
+        elif page == "Data Entry":
+            data_entry()
 
 if __name__ == "__main__":
     main()

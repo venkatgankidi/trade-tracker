@@ -26,17 +26,17 @@ def aggregate_gains():
 
     # Stocks
     for pos in closed_positions:
-        entry_time = parse_date(pos.get("entry_time"))
-        exit_time = parse_date(pos.get("exit_time"))
+        entry_date = parse_date(pos.get("entry_date"))
+        exit_date = parse_date(pos.get("exit_date"))
         entry_price = pos.get("entry_price", 0) or 0
         exit_price = pos.get("exit_price", 0) or 0
         quantity = pos.get("quantity", 0) or 0
-        trade_type = pos.get("trade_type", "Buy")
-        if not exit_time or not entry_time:
+        trade_type = pos.get("trade_type") or "Buy"
+        if not exit_date or not entry_date:
             continue
-        year = exit_time.year
-        holding_period = (exit_time - entry_time).days
-        if trade_type.lower() == "sell":
+        year = exit_date.year
+        holding_period = (exit_date - entry_date).days
+        if str(trade_type).lower() == "sell":
             gain = (entry_price - exit_price) * quantity
         else:
             gain = (exit_price - entry_price) * quantity
@@ -105,8 +105,10 @@ def taxes_ui():
     # Prepare breakdown DataFrame
     if yearly_breakdown:
         rows = []
-        for (year, asset, term) in sorted(yearly_breakdown):
-            gain = yearly_breakdown[(year, asset, term)]
+        for breakdown_key in sorted(yearly_breakdown):
+            # Unpack key (year, asset, term)
+            year, asset, term = breakdown_key
+            gain = yearly_breakdown[breakdown_key]
             tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
             tax = gain * tax_rate
             rows.append({

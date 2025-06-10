@@ -32,19 +32,18 @@ def trade_form() -> None:
             trade_data = {
                 "ticker": ticker.strip().upper(),
                 "platform_id": platform_id,
-                "purchase_price": purchase_price,
-                "purchase_quantity": purchase_quantity,
+                "price": purchase_price,
+                "quantity": purchase_quantity,
                 "date": date,
                 "trade_type": trade_type,
             }
             try:
                 conn = st.connection("postgresql", type="sql")
                 columns = list(trade_data.keys())
-                values = [trade_data[col] for col in columns]
-                placeholders = ", ".join(["%s"] * len(columns))
+                placeholders = ", ".join([f":{col}" for col in columns])
                 sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
                 with conn.session as session:
-                    session.execute(sql, values)
+                    session.execute(sql, trade_data)
                     session.commit()
                 st.success("Trade added successfully!")
             except Exception as e:

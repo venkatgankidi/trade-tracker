@@ -65,6 +65,26 @@ def get_position_summary() -> pd.DataFrame:
             })
     return pd.DataFrame(rows)
 
+def get_position_summary_with_total() -> pd.DataFrame:
+    """
+    Returns the position summary with an additional total row.
+    """
+    summary_df = get_position_summary()
+    if not summary_df.empty:
+        total_investment = summary_df["Total Investment"].sum()
+        total_value = summary_df["Total Portfolio Value"].sum()
+        total_unrealized = summary_df["Total Unrealized Gains"].sum()
+        percent_unrealized = (total_unrealized / total_investment * 100) if total_investment else 0.0
+        overall_row = {
+            "Platform": "Total",
+            "Total Investment": round(total_investment, 2),
+            "Total Portfolio Value": round(total_value, 2),
+            "Total Unrealized Gains": round(total_unrealized, 2),
+            "Pct Unrealized Gain": f"{round(percent_unrealized, 2)}%"
+        }
+        summary_df = pd.concat([summary_df, pd.DataFrame([overall_row])], ignore_index=True)
+    return summary_df
+
 def _format_gain(x: float) -> str:
     color = "green" if x > 0 else "red"
     return f'<span style="color: {color}">{x:.2f}</span>'
@@ -73,12 +93,13 @@ def _format_percent(x: float) -> str:
     color = "green" if x > 0 else "red"
     return f'<span style="color: {color}">{x:.2f}%</span>'
 
-def portfolio_report() -> None:
+def portfolio_ui() -> None:
     """
     Streamlit UI for portfolio summary and holdings, with formatted output and error handling.
     """
+    st.title("Portfolio")
     st.subheader("Portfolio Summary")
-    summary_df = get_position_summary()
+    summary_df = get_position_summary_with_total()
     if not summary_df.empty:
         st.dataframe(summary_df, use_container_width=True, hide_index=True)
     else:

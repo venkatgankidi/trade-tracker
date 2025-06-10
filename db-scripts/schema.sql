@@ -17,14 +17,15 @@ CREATE TABLE IF NOT EXISTS positions (
     id SERIAL PRIMARY KEY,
     ticker TEXT NOT NULL,
     trade_type TEXT,
-    position_type TEXT NOT NULL, -- e.g., LONG, SHORT, FLAT
+    position_status TEXT NOT NULL, -- 'open' or 'close'
     entry_price REAL,
     quantity REAL,
     exit_price REAL,
-    exit_time TIMESTAMP DEFAULT NULL,
-    entry_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    exit_date DATE DEFAULT NULL,
+    entry_date DATE DEFAULT CURRENT_DATE,
     profit_loss REAL,
-    notes TEXT
+    platform_id INTEGER REFERENCES platforms(id),
+    CONSTRAINT unique_ticker_platform_status UNIQUE (ticker, platform_id, position_status)
 );
 
 CREATE TABLE IF NOT EXISTS option_trades (
@@ -39,7 +40,7 @@ CREATE TABLE IF NOT EXISTS option_trades (
     option_open_price NUMERIC(12, 4) NOT NULL,
     option_close_price NUMERIC(12, 4),
     profit_loss NUMERIC(12, 4),
-    status VARCHAR(16) CHECK (status IN ('open', 'expired', 'exercised')) DEFAULT 'open',
+    status VARCHAR(16) CHECK (status IN ('open', 'expired', 'exercised','close')) DEFAULT 'open',
     close_date DATE,
     notes TEXT
 );
