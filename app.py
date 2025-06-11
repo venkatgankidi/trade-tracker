@@ -19,35 +19,42 @@ NAVIGATION = {
     "Data Entry": "\U0001F4DD Data Entry"
 }
 
+# Add config for authentication toggle
+def is_auth_enabled():
+    # Use st.secrets for config, fallback to True if not set
+    return str(st.secrets.get("auth_enabled", "true")).lower() == "true"
+
 USERNAME = st.secrets.get("auth_username")
 PASSWORD = st.secrets.get("auth_password")
 
-if not USERNAME or not PASSWORD:
-    st.error("Authentication credentials are not set. Please configure them in the Streamlit secrets.toml file.")
-    st.stop()
+if is_auth_enabled():
+    if not USERNAME or not PASSWORD:
+        st.error("Authentication credentials are not set. Please configure them in the Streamlit secrets.toml file.")
+        st.stop()
 
 def main():
-    if "authenticated" not in st.session_state:
-        st.session_state["authenticated"] = False
-
-    if not st.session_state["authenticated"]:
-        st.title("Login")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if username == USERNAME and password == PASSWORD:
-                st.session_state["authenticated"] = True
-                st.success("Login successful")
-                st.rerun()
-            else:
-                st.error("Invalid username or password")
-        return
-
-    with st.sidebar:
-        st.markdown(f"**User:** {USERNAME}")
-        if st.button("Logout"):
+    if is_auth_enabled():
+        if "authenticated" not in st.session_state:
             st.session_state["authenticated"] = False
-            st.rerun()
+
+        if not st.session_state["authenticated"]:
+            st.title("Login")
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            if st.button("Login"):
+                if username == USERNAME and password == PASSWORD:
+                    st.session_state["authenticated"] = True
+                    st.success("Login successful")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password")
+            return
+
+        with st.sidebar:
+            st.markdown(f"**User:** {USERNAME}")
+            if st.button("Logout"):
+                st.session_state["authenticated"] = False
+                st.rerun()
 
     load_platforms()
     st.sidebar.title("Navigation")

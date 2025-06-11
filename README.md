@@ -72,3 +72,7 @@ You can configure usernames and passwords directly in your code or via environme
 - For authentication, see the code in `app.py` for basic authentication usage.
 - For production, secure your secrets and database access.
 
+## Disclaimer
+
+Most of the code in this repository was generated or written with the assistance of AI (GitHub Copilot, ChatGPT, or similar tools). Please review and test thoroughly before using in production.
+
