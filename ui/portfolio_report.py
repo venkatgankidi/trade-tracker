@@ -30,14 +30,16 @@ GROUP BY platforms.name, ticker
             portfolio_df[col] = portfolio_df[col].astype(float)
     portfolio_df = portfolio_df[portfolio_df["total_quantity"] > 0]
 
-    def fetch_current_price(ticker: str) -> Optional[float]:
+    # Fetch current prices for each unique ticker only once
+    unique_tickers = portfolio_df["ticker"].unique()
+    ticker_price_map = {}
+    for ticker in unique_tickers:
         try:
             price = yf.Ticker(ticker).history(period="1d", interval="1m")["Close"].iloc[-1]
-            return price
+            ticker_price_map[ticker] = price
         except Exception:
-            return None
-
-    portfolio_df["current_price"] = portfolio_df["ticker"].apply(fetch_current_price)
+            ticker_price_map[ticker] = None
+    portfolio_df["current_price"] = portfolio_df["ticker"].map(ticker_price_map)
     portfolio_df["current_value"] = portfolio_df["current_price"] * portfolio_df["total_quantity"]
     portfolio_df["unrealized_gain"] = portfolio_df["current_value"] - portfolio_df["trade_cost"]
     portfolio_df["percent_profit_loss"] = (portfolio_df["unrealized_gain"] / portfolio_df["trade_cost"]) * 100
