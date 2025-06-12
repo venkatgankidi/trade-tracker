@@ -15,7 +15,7 @@ SELECT platforms.name AS platform,
        ticker,
        SUM(CASE WHEN trade_type = 'Buy' THEN quantity ELSE -quantity END) AS total_quantity, 
        AVG(price) AS average_price,
-       SUM(price * quantity) AS trade_cost
+       SUM(CASE WHEN trade_type = 'Buy' THEN price * quantity ELSE -price * quantity END) AS trade_cost
 FROM trades
 JOIN platforms ON trades.platform_id = platforms.id
 GROUP BY platforms.name, ticker

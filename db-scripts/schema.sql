@@ -24,8 +24,7 @@ CREATE TABLE IF NOT EXISTS positions (
     exit_date DATE DEFAULT NULL,
     entry_date DATE DEFAULT CURRENT_DATE,
     profit_loss REAL,
-    platform_id INTEGER REFERENCES platforms(id),
-    CONSTRAINT unique_ticker_platform_status UNIQUE (ticker, platform_id, position_status)
+    platform_id INTEGER REFERENCES platforms(id)
 );
 
 CREATE TABLE IF NOT EXISTS option_trades (
