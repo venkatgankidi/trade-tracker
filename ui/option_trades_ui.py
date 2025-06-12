@@ -37,13 +37,20 @@ def option_trades_ui() -> None:
     open_trades = load_option_trades(status="open")
     if open_trades:
         df_open = pd.DataFrame(open_trades)
-        # Map platform_id to platform name
+        # Map platform_id to platform name and move next to ticker
         if "platform_id" in df_open.columns:
             platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-            df_open["platform"] = df_open["platform_id"].map(platform_map)
+            df_open["Platform"] = df_open["platform_id"].map(platform_map)
             df_open = df_open.drop(columns=["platform_id"])
-        # Move open_fee next to option_open_price
+        # Remove id column
+        if "id" in df_open.columns:
+            df_open = df_open.drop(columns=["id"])
+        # Move Platform next to ticker
         cols = list(df_open.columns)
+        if "ticker" in cols and "Platform" in cols:
+            cols.insert(cols.index("ticker") + 1, cols.pop(cols.index("Platform")))
+            df_open = df_open[cols]
+        # Move open_fee next to option_open_price
         if "option_open_price" in cols and "open_fee" in cols:
             open_price_idx = cols.index("option_open_price")
             fee_idx = cols.index("open_fee")
@@ -70,15 +77,21 @@ def option_trades_ui() -> None:
         total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
         st.subheader(f"Total Profit/Loss (Closed Option Trades): {total_pnl:.2f}")
         df_closed = pd.DataFrame(closed_trades)
-        # Map platform_id to platform name
+        # Map platform_id to platform name and move next to ticker
         if "platform_id" in df_closed.columns:
             platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-            df_closed["platform"] = df_closed["platform_id"].map(platform_map)
+            df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
             df_closed = df_closed.drop(columns=["platform_id"])
-        if "profit_loss" in df_closed.columns:
-            df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
+        # Remove id column
         if "id" in df_closed.columns:
             df_closed = df_closed.drop(columns=["id"])
+        # Move Platform next to ticker
+        cols = list(df_closed.columns)
+        if "ticker" in cols and "Platform" in cols:
+            cols.insert(cols.index("ticker") + 1, cols.pop(cols.index("Platform")))
+            df_closed = df_closed[cols]
+        if "profit_loss" in df_closed.columns:
+            df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
         if "entry_date" in df_closed.columns:
             df_closed = df_closed.sort_values("entry_date")
         st.markdown(df_closed.to_html(escape=False, index=False), unsafe_allow_html=True)
