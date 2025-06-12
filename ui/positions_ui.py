@@ -78,11 +78,17 @@ def positions_ui() -> None:
             if "platform_id" in df_closed.columns:
                 platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
                 df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
+            # Add avg exit price to summary
             summary_closed = df_closed.groupby(["ticker", "Platform"]).agg({
                 "quantity": "sum",
-                "profit_loss": "sum"
+                "profit_loss": "sum",
+                "exit_price": "mean"
             }).reset_index()
-            summary_closed = summary_closed.rename(columns={"quantity": "Total Quantity", "profit_loss": "Total P/L"})
+            summary_closed = summary_closed.rename(columns={
+                "quantity": "Total Quantity",
+                "profit_loss": "Total P/L",
+                "exit_price": "Avg Exit Price"
+            })
             st.dataframe(summary_closed, use_container_width=True, hide_index=True)
         else:
             st.write("No closed trades found.")
