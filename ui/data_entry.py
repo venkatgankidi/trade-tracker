@@ -35,10 +35,11 @@ def data_entry():
                 close_status = st.selectbox("Status", ["expired", "exercised", "close"])
                 close_date = st.date_input("Close Date", value=datetime.date.today())
                 option_close_price = st.number_input("Option Close Price", min_value=0.0, format="%.2f")
+                close_fee = st.number_input("Close Fee", min_value=0.0, format="%.2f", value=0.0)
                 notes = st.text_area("Notes", value=trade.get("notes") or "")
                 confirm = st.form_submit_button("Confirm Close")
                 if confirm:
-                    close_option_trade(trade_id, close_status, close_date, option_close_price, notes)
+                    close_option_trade(trade_id, close_status, close_date, option_close_price, notes, close_fee)
                     st.success(f"Option trade {trade_id} closed as {close_status}.")
                     import time
                     time.sleep(2)

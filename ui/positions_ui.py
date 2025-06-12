@@ -76,16 +76,21 @@ def positions_ui() -> None:
         for platform in sorted(df_closed["Platform"].unique()):
             with st.expander(f"{platform} - Closed Trades", expanded=False):
                 platform_df = df_closed[df_closed["Platform"] == platform]
-                # Summary by ticker for this platform
+                # Summary by ticker for this platform, now includes fees
                 summary_closed = platform_df.groupby(["ticker"]).agg({
                     "quantity": "sum",
                     "profit_loss": "sum",
-                    "exit_price": "mean"
+                    "exit_price": "mean",
+                    "open_fee": "sum",
+                    "close_fee": "sum"
                 }).reset_index()
+                summary_closed["Total Fee"] = summary_closed["open_fee"] + summary_closed["close_fee"]
                 summary_closed = summary_closed.rename(columns={
                     "quantity": "Total Quantity",
                     "profit_loss": "Total P/L",
-                    "exit_price": "Avg Exit Price"
+                    "exit_price": "Avg Exit Price",
+                    "open_fee": "Open Fee",
+                    "close_fee": "Close Fee"
                 })
                 st.markdown("**Summary by Ticker**")
                 st.dataframe(summary_closed, use_container_width=True, hide_index=True)

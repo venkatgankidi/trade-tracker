@@ -90,6 +90,7 @@ def option_trades_data_entry():
         trade_date = st.date_input("Trade Date", value=datetime.date.today())
         transaction_type = st.selectbox("Transaction Type", ["credit", "debit"])
         option_open_price = st.number_input("Option Open Price", min_value=0.0, format="%.2f")
+        open_fee = st.number_input("Open Fee", min_value=0.0, format="%.2f", value=0.0)
         notes = st.text_area("Notes")
         submitted = st.form_submit_button("Add Option Trade")
         if submitted:
@@ -107,7 +108,8 @@ def option_trades_data_entry():
                     trade_date,
                     transaction_type,
                     option_open_price,
-                    notes
+                    notes,
+                    open_fee
                 )
                 st.success("Option trade added. Please refresh to see the update.")
                 import time
