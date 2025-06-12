@@ -173,63 +173,83 @@ def close_option_trade(trade_id, status, close_date, option_close_price, notes=N
 
 def sync_positions_from_trades():
     """
-    Syncs the positions table with the trades table. For each ticker/platform, creates or updates a position reflecting all trades (open or closed).
-    If net quantity > 0, upserts as open. If net quantity == 0, upserts as close.
-    The quantity in the position is always the total buy quantity.
-    Calculates profit_loss for closed positions.
-    Trade type: day (same day), swing (<=30 days), position (>30 days).
-    Prevents duplicate positions for the same ticker/platform.
+    Syncs the positions table with the trades table. Handles partial sells by matching sells to open buy lots (FIFO).
+    For each ticker/platform, creates closed positions for sold shares and open positions for remaining shares.
     """
     conn = get_st_connection()
     with conn.session as session:
-        # Aggregate trades by ticker and platform
+        # Get all trades ordered by ticker, platform, date
         result = session.execute(text('''
-            SELECT ticker, platform_id,
-                SUM(CASE WHEN trade_type = 'Buy' THEN quantity ELSE 0 END) AS total_buy_qty,
-                SUM(CASE WHEN trade_type = 'Sell' THEN quantity ELSE 0 END) AS total_sell_qty,
-                SUM(CASE WHEN trade_type = 'Buy' THEN price * quantity ELSE 0 END) / NULLIF(SUM(CASE WHEN trade_type = 'Buy' THEN quantity ELSE 0 END), 0) AS avg_buy_price,
-                MAX(CASE WHEN trade_type = 'Buy' THEN date ELSE NULL END) AS entry_date,
-                SUM(CASE WHEN trade_type = 'Sell' THEN price * quantity ELSE 0 END) / NULLIF(SUM(CASE WHEN trade_type = 'Sell' THEN quantity ELSE 0 END), 0) AS avg_sell_price,
-                MAX(CASE WHEN trade_type = 'Sell' THEN date ELSE NULL END) AS exit_date,
-                MIN(CASE WHEN trade_type = 'Buy' THEN date ELSE NULL END) AS first_entry_date
+            SELECT ticker, platform_id, price, quantity, date, trade_type
             FROM trades
-            GROUP BY ticker, platform_id
+            ORDER BY ticker, platform_id, date, id
         '''))
-        trades_summary = result.fetchall()
-        for row in trades_summary:
-            ticker, platform_id, total_buy_qty, total_sell_qty, avg_buy_price, entry_date, avg_sell_price, exit_date, first_entry_date = row
-            net_quantity = (total_buy_qty or 0) - (total_sell_qty or 0)
-            # Calculate profit/loss for closed positions
-            profit_loss = None
-            trade_type = None
-            if entry_date and exit_date:
-                try:
-                    entry_dt = first_entry_date if isinstance(first_entry_date, (datetime.datetime, datetime.date)) else datetime.datetime.fromisoformat(str(first_entry_date))
-                    exit_dt = exit_date if isinstance(exit_date, (datetime.datetime, datetime.date)) else datetime.datetime.fromisoformat(str(exit_date))
-                    days_held = (exit_dt - entry_dt).days
-                    if entry_dt == exit_dt:
-                        trade_type = "day"
-                    elif days_held <= 30:
-                        trade_type = "swing"
-                    else:
-                        trade_type = "position"
-                except Exception:
-                    trade_type = None
-            if net_quantity == 0 and total_buy_qty and total_sell_qty:
-                profit_loss = (avg_sell_price - avg_buy_price) * total_sell_qty
-            # Remove all existing positions for this ticker/platform before upsert
-            session.execute(text("DELETE FROM positions WHERE ticker = :ticker AND platform_id = :platform_id"), {"ticker": ticker, "platform_id": platform_id})
-            if net_quantity > 0:
-                # Open position
-                session.execute(text("""
+        trades = result.fetchall()
+        # Group trades by (ticker, platform_id)
+        from collections import defaultdict, deque
+        trades_by_key = defaultdict(list)
+        for row in trades:
+            ticker, platform_id, price, quantity, date, trade_type = row
+            trades_by_key[(ticker, platform_id)].append({
+                'price': float(price),
+                'quantity': float(quantity),
+                'date': date,
+                'trade_type': trade_type
+            })
+        # Remove all positions before upsert
+        session.execute(text("DELETE FROM positions"))
+        for (ticker, platform_id), trade_list in trades_by_key.items():
+            open_lots = deque()
+            closed_positions = []
+            for trade in trade_list:
+                if trade['trade_type'].lower() == 'buy':
+                    open_lots.append({
+                        'price': trade['price'],
+                        'quantity': trade['quantity'],
+                        'entry_date': trade['date'],
+                        'remaining': trade['quantity']
+                    })
+                elif trade['trade_type'].lower() == 'sell':
+                    sell_qty = trade['quantity']
+                    sell_price = trade['price']
+                    sell_date = trade['date']
+                    # FIFO match sell to open lots
+                    while sell_qty > 0 and open_lots:
+                        lot = open_lots[0]
+                        lot_qty = lot['remaining']
+                        matched_qty = min(lot_qty, sell_qty)
+                        profit_loss = (sell_price - lot['price']) * matched_qty
+                        # Insert closed position for matched_qty
+                        session.execute(text('''
+                            INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, exit_price, exit_date, platform_id, profit_loss)
+                            VALUES (:ticker, :trade_type, 'close', :entry_price, :quantity, :entry_date, :exit_price, :exit_date, :platform_id, :profit_loss)
+                        '''), {
+                            'ticker': ticker,
+                            'trade_type': None,
+                            'entry_price': lot['price'],
+                            'quantity': matched_qty,
+                            'entry_date': lot['entry_date'],
+                            'exit_price': sell_price,
+                            'exit_date': sell_date,
+                            'platform_id': platform_id,
+                            'profit_loss': profit_loss
+                        })
+                        lot['remaining'] -= matched_qty
+                        sell_qty -= matched_qty
+                        if lot['remaining'] == 0:
+                            open_lots.popleft()
+                        # If sell_qty == 0, done
+            # After all trades, any open_lots are open positions
+            for lot in open_lots:
+                session.execute(text('''
                     INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id, profit_loss)
                     VALUES (:ticker, NULL, 'open', :entry_price, :quantity, :entry_date, :platform_id, NULL)
-                """), {"ticker": ticker, "entry_price": avg_buy_price, "quantity": total_buy_qty, "entry_date": entry_date, "platform_id": platform_id})
-            else:
-                # Closed position
-                session.execute(text("""
-                    INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, exit_price, exit_date, platform_id, profit_loss)
-                    VALUES (:ticker, :trade_type, 'close', :entry_price, :quantity, :entry_date, :exit_price, :exit_date, :platform_id, :profit_loss)
-                """), {"ticker": ticker, "trade_type":trade_type, "entry_price": avg_buy_price, "quantity": total_buy_qty, "entry_date": entry_date, "exit_price": avg_sell_price, "exit_date": exit_date, "platform_id": platform_id, "profit_loss": profit_loss})
+                '''), {
+                    'ticker': ticker,
+                    'entry_price': lot['price'],
+                    'quantity': lot['remaining'],
+                    'entry_date': lot['entry_date'],
+                    'platform_id': platform_id
+                })
         session.commit()
     st.cache_data.clear()
