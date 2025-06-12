@@ -21,7 +21,7 @@ def get_positions_summary() -> pd.DataFrame:
 
 def positions_ui() -> None:
     """
-    Streamlit UI for viewing positions. Adds grouped summary and collapsible details for open/closed positions.
+    Streamlit UI for viewing positions. Adds grouped summary and collapsible details for open/closed positions by platform.
     """
     st.title("Positions")
 
@@ -51,24 +51,25 @@ def positions_ui() -> None:
         else:
             st.write("No open positions found.")
 
-    # --- Detailed Open Positions (Collapsible) ---
-    with st.expander("Detailed Open Positions", expanded=False):
-        if positions:
-            df = pd.DataFrame(positions)
-            if "platform_id" in df.columns:
-                platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-                df["Platform"] = df["platform_id"].map(platform_map)
-                df = df.drop(columns=["platform_id"])
-            for col in ["trade_type", "position_status"]:
-                if col in df.columns:
-                    df = df.drop(columns=[col])
-            if "id" in df.columns:
-                df = df.drop(columns=["id"])
-            if "entry_date" in df.columns:
-                df = df.sort_values("entry_date")
-            st.dataframe(df, use_container_width=True, hide_index=True)
-        else:
-            st.write("No open positions found.")
+    # --- Detailed Open Positions by Platform (Collapsible) ---
+    if positions:
+        df = pd.DataFrame(positions)
+        if "platform_id" in df.columns:
+            platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+            df["Platform"] = df["platform_id"].map(platform_map)
+            df = df.drop(columns=["platform_id"])
+        for col in ["trade_type", "position_status"]:
+            if col in df.columns:
+                df = df.drop(columns=[col])
+        if "id" in df.columns:
+            df = df.drop(columns=["id"])
+        if "entry_date" in df.columns:
+            df = df.sort_values("entry_date")
+        for platform in sorted(df["Platform"].unique()):
+            with st.expander(f"Detailed Open Positions - {platform}", expanded=False):
+                st.dataframe(df[df["Platform"] == platform], use_container_width=True, hide_index=True)
+    else:
+        st.write("No open positions found.")
 
     # --- Summary by Ticker and Platform (Closed Positions) ---
     st.subheader("Closed Trades")
@@ -93,22 +94,23 @@ def positions_ui() -> None:
         else:
             st.write("No closed trades found.")
 
-    # --- Detailed Closed Positions (Collapsible) ---
-    with st.expander("Detailed Closed Trades", expanded=False):
-        if closed_positions:
-            df_closed = pd.DataFrame(closed_positions)
-            if "platform_id" in df_closed.columns:
-                platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-                df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
-                df_closed = df_closed.drop(columns=["platform_id"])
-            for col in ["trade_type", "position_status"]:
-                if col in df_closed.columns:
-                    df_closed = df_closed.drop(columns=[col])
-            if "id" in df_closed.columns:
-                df_closed = df_closed.drop(columns=["id"])
-            if "entry_date" in df_closed.columns:
-                df_closed = df_closed.sort_values("entry_date")
-            st.dataframe(df_closed, use_container_width=True, hide_index=True)
-        else:
-            st.write("No closed trades found.")
+    # --- Detailed Closed Positions by Platform (Collapsible) ---
+    if closed_positions:
+        df_closed = pd.DataFrame(closed_positions)
+        if "platform_id" in df_closed.columns:
+            platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+            df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
+            df_closed = df_closed.drop(columns=["platform_id"])
+        for col in ["trade_type", "position_status"]:
+            if col in df_closed.columns:
+                df_closed = df_closed.drop(columns=[col])
+        if "id" in df_closed.columns:
+            df_closed = df_closed.drop(columns=["id"])
+        if "entry_date" in df_closed.columns:
+            df_closed = df_closed.sort_values("entry_date")
+        for platform in sorted(df_closed["Platform"].unique()):
+            with st.expander(f"Detailed Closed Trades - {platform}", expanded=False):
+                st.dataframe(df_closed[df_closed["Platform"] == platform], use_container_width=True, hide_index=True)
+    else:
+        st.write("No closed trades found.")
 
