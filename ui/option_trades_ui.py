@@ -35,20 +35,26 @@ def option_trades_ui() -> None:
     # Open Option Trades Table
     st.header("Open Option Trades")
     open_trades = load_option_trades(status="open")
-
-
-    def _format_gain(x: Optional[float]) -> str:
-        color = "green" if x and x > 0 else "red"
-        return f'<span style="color: {color}">{x:.2f}</span>' if x is not None else ""
-
     if open_trades:
         df_open = pd.DataFrame(open_trades)
-        if "profit_loss" in df_open.columns:
-            df_open["profit_loss"] = df_open["profit_loss"].apply(_format_gain)
-        if "id" in df_open.columns:
-            df_open = df_open.drop(columns=["id"])
-        if "entry_date" in df_open.columns:
-            df_open = df_open.sort_values("entry_date")
+        # Map platform_id to platform name
+        if "platform_id" in df_open.columns:
+            platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+            df_open["platform"] = df_open["platform_id"].map(platform_map)
+            df_open = df_open.drop(columns=["platform_id"])
+        # Move open_fee next to option_open_price
+        cols = list(df_open.columns)
+        if "option_open_price" in cols and "open_fee" in cols:
+            open_price_idx = cols.index("option_open_price")
+            fee_idx = cols.index("open_fee")
+            if abs(open_price_idx - fee_idx) > 1:
+                cols.remove("open_fee")
+                cols.insert(open_price_idx + 1, "open_fee")
+            df_open = df_open[cols]
+        # Remove closing-related columns
+        for col in ["option_close_price", "close_fee", "profit_loss", "status", "close_date"]:
+            if col in df_open.columns:
+                df_open = df_open.drop(columns=[col])
         st.markdown(df_open.to_html(escape=False, index=False), unsafe_allow_html=True)
     else:
         st.write("No open option trades.")
@@ -64,6 +70,11 @@ def option_trades_ui() -> None:
         total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
         st.subheader(f"Total Profit/Loss (Closed Option Trades): {total_pnl:.2f}")
         df_closed = pd.DataFrame(closed_trades)
+        # Map platform_id to platform name
+        if "platform_id" in df_closed.columns:
+            platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+            df_closed["platform"] = df_closed["platform_id"].map(platform_map)
+            df_closed = df_closed.drop(columns=["platform_id"])
         if "profit_loss" in df_closed.columns:
             df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
         if "id" in df_closed.columns:
@@ -73,6 +84,10 @@ def option_trades_ui() -> None:
         st.markdown(df_closed.to_html(escape=False, index=False), unsafe_allow_html=True)
     else:
         st.write("No closed option trades.")
+
+    def _format_gain(x: Optional[float]) -> str:
+        color = "green" if x and x > 0 else "red"
+        return f'<span style="color: {color}">{x:.2f}</span>' if x is not None else ""
 
 def option_trades_data_entry():
     """
