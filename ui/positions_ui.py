@@ -21,7 +21,7 @@ def get_positions_summary() -> pd.DataFrame:
 
 def positions_ui() -> None:
     """
-    Streamlit UI for viewing positions. Adds grouped summary and collapsible details for open/closed positions by platform.
+    Streamlit UI for viewing positions. Adds grouped summary and collapsible details for open/closed positions by platform, with tickers grouped under each platform.
     """
     st.title("Positions")
 
@@ -34,83 +34,72 @@ def positions_ui() -> None:
     positions = load_positions()
     closed_positions = load_closed_positions()
 
-    # --- Summary by Ticker and Platform (Open Positions) ---
+    # --- Summary by Platform (Open Positions) ---
     st.subheader("Current Positions")
-    with st.expander("Summary by Ticker and Platform (Open Positions)", expanded=True):
-        if positions:
-            df = pd.DataFrame(positions)
-            if "platform_id" in df.columns:
-                platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-                df["Platform"] = df["platform_id"].map(platform_map)
-            summary = df.groupby(["ticker", "Platform"]).agg({
-                "quantity": "sum",
-                "entry_price": "mean"
-            }).reset_index()
-            summary = summary.rename(columns={"quantity": "Total Quantity", "entry_price": "Avg Entry Price"})
-            st.dataframe(summary, use_container_width=True, hide_index=True)
-        else:
-            st.write("No open positions found.")
-
-    # --- Detailed Open Positions by Platform (Collapsible) ---
     if positions:
         df = pd.DataFrame(positions)
         if "platform_id" in df.columns:
             platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
             df["Platform"] = df["platform_id"].map(platform_map)
-            df = df.drop(columns=["platform_id"])
-        for col in ["trade_type", "position_status"]:
-            if col in df.columns:
-                df = df.drop(columns=[col])
-        if "id" in df.columns:
-            df = df.drop(columns=["id"])
-        if "entry_date" in df.columns:
-            df = df.sort_values("entry_date")
         for platform in sorted(df["Platform"].unique()):
-            with st.expander(f"Detailed Open Positions - {platform}", expanded=False):
-                st.dataframe(df[df["Platform"] == platform], use_container_width=True, hide_index=True)
+            with st.expander(f"{platform} - Open Positions", expanded=False):
+                platform_df = df[df["Platform"] == platform]
+                # Summary by ticker for this platform
+                summary = platform_df.groupby(["ticker"]).agg({
+                    "quantity": "sum",
+                    "entry_price": "mean"
+                }).reset_index()
+                summary = summary.rename(columns={"quantity": "Total Quantity", "entry_price": "Avg Entry Price"})
+                st.markdown("**Summary by Ticker**")
+                st.dataframe(summary, use_container_width=True, hide_index=True)
+                # Detailed positions for this platform
+                st.markdown("**Detailed Positions**")
+                detail_df = platform_df.copy()
+                for col in ["trade_type", "position_status", "platform_id"]:
+                    if col in detail_df.columns:
+                        detail_df = detail_df.drop(columns=[col])
+                if "id" in detail_df.columns:
+                    detail_df = detail_df.drop(columns=["id"])
+                if "entry_date" in detail_df.columns:
+                    detail_df = detail_df.sort_values("entry_date")
+                st.dataframe(detail_df, use_container_width=True, hide_index=True)
     else:
         st.write("No open positions found.")
 
-    # --- Summary by Ticker and Platform (Closed Positions) ---
+    # --- Summary by Platform (Closed Positions) ---
     st.subheader("Closed Trades")
-    with st.expander("Summary by Ticker and Platform (Closed Positions)", expanded=True):
-        if closed_positions:
-            df_closed = pd.DataFrame(closed_positions)
-            if "platform_id" in df_closed.columns:
-                platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-                df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
-            # Add avg exit price to summary
-            summary_closed = df_closed.groupby(["ticker", "Platform"]).agg({
-                "quantity": "sum",
-                "profit_loss": "sum",
-                "exit_price": "mean"
-            }).reset_index()
-            summary_closed = summary_closed.rename(columns={
-                "quantity": "Total Quantity",
-                "profit_loss": "Total P/L",
-                "exit_price": "Avg Exit Price"
-            })
-            st.dataframe(summary_closed, use_container_width=True, hide_index=True)
-        else:
-            st.write("No closed trades found.")
-
-    # --- Detailed Closed Positions by Platform (Collapsible) ---
     if closed_positions:
         df_closed = pd.DataFrame(closed_positions)
         if "platform_id" in df_closed.columns:
             platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
             df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
-            df_closed = df_closed.drop(columns=["platform_id"])
-        for col in ["trade_type", "position_status"]:
-            if col in df_closed.columns:
-                df_closed = df_closed.drop(columns=[col])
-        if "id" in df_closed.columns:
-            df_closed = df_closed.drop(columns=["id"])
-        if "entry_date" in df_closed.columns:
-            df_closed = df_closed.sort_values("entry_date")
         for platform in sorted(df_closed["Platform"].unique()):
-            with st.expander(f"Detailed Closed Trades - {platform}", expanded=False):
-                st.dataframe(df_closed[df_closed["Platform"] == platform], use_container_width=True, hide_index=True)
+            with st.expander(f"{platform} - Closed Trades", expanded=False):
+                platform_df = df_closed[df_closed["Platform"] == platform]
+                # Summary by ticker for this platform
+                summary_closed = platform_df.groupby(["ticker"]).agg({
+                    "quantity": "sum",
+                    "profit_loss": "sum",
+                    "exit_price": "mean"
+                }).reset_index()
+                summary_closed = summary_closed.rename(columns={
+                    "quantity": "Total Quantity",
+                    "profit_loss": "Total P/L",
+                    "exit_price": "Avg Exit Price"
+                })
+                st.markdown("**Summary by Ticker**")
+                st.dataframe(summary_closed, use_container_width=True, hide_index=True)
+                # Detailed closed positions for this platform
+                st.markdown("**Detailed Closed Positions**")
+                detail_df = platform_df.copy()
+                for col in ["trade_type", "position_status", "platform_id"]:
+                    if col in detail_df.columns:
+                        detail_df = detail_df.drop(columns=[col])
+                if "id" in detail_df.columns:
+                    detail_df = detail_df.drop(columns=["id"])
+                if "entry_date" in detail_df.columns:
+                    detail_df = detail_df.sort_values("entry_date")
+                st.dataframe(detail_df, use_container_width=True, hide_index=True)
     else:
         st.write("No closed trades found.")
 
