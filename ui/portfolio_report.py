@@ -4,6 +4,7 @@ import yfinance as yf
 from db.db_utils import PLATFORM_CACHE
 from sqlalchemy import text
 from typing import Optional
+import time
 
 def _get_portfolio_df() -> pd.DataFrame:
     """
@@ -30,15 +31,9 @@ GROUP BY platforms.name, ticker
             portfolio_df[col] = portfolio_df[col].astype(float)
     portfolio_df = portfolio_df[portfolio_df["total_quantity"] > 0]
 
-    # Fetch current prices for each unique ticker only once
+    # Fetch current prices for each unique ticker only once, cache for 5 min
     unique_tickers = portfolio_df["ticker"].unique()
-    ticker_price_map = {}
-    for ticker in unique_tickers:
-        try:
-            price = yf.Ticker(ticker).history(period="1d", interval="1m")["Close"].iloc[-1]
-            ticker_price_map[ticker] = price
-        except Exception:
-            ticker_price_map[ticker] = None
+    ticker_price_map = _get_ticker_prices(unique_tickers)
     portfolio_df["current_price"] = portfolio_df["ticker"].map(ticker_price_map)
     portfolio_df["current_value"] = portfolio_df["current_price"] * portfolio_df["total_quantity"]
     portfolio_df["unrealized_gain"] = portfolio_df["current_value"] - portfolio_df["trade_cost"]
@@ -129,3 +124,24 @@ def portfolio_ui() -> None:
         )
 
         st.markdown(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+# Global cache for ticker prices
+_TICKER_PRICE_CACHE = {}
+_TICKER_PRICE_CACHE_TIME = 0
+_TICKER_PRICE_CACHE_TTL = 300  # 5 minutes
+
+def _get_ticker_prices(tickers):
+    global _TICKER_PRICE_CACHE, _TICKER_PRICE_CACHE_TIME
+    now = time.time()
+    # Refresh cache if expired or missing tickers
+    if (now - _TICKER_PRICE_CACHE_TIME > _TICKER_PRICE_CACHE_TTL) or not all(t in _TICKER_PRICE_CACHE for t in tickers):
+        price_map = {}
+        for ticker in tickers:
+            try:
+                price = yf.Ticker(ticker).history(period="1d", interval="1m")["Close"].iloc[-1]
+                price_map[ticker] = price
+            except Exception:
+                price_map[ticker] = None
+        _TICKER_PRICE_CACHE = price_map
+        _TICKER_PRICE_CACHE_TIME = now
+    return {t: _TICKER_PRICE_CACHE.get(t) for t in tickers}
