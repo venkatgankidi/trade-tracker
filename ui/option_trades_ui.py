@@ -57,7 +57,6 @@ def option_trades_ui() -> None:
                 df_open,
                 platform_map,
                 drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date","id"],
-                move_cols=["Platform", "open_fee"]
             )
             st.dataframe(df_open, use_container_width=True, hide_index=True)
         else:
