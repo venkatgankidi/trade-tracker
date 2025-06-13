@@ -44,14 +44,12 @@ def positions_ui() -> None:
         for platform in sorted(df["Platform"].unique()):
             with st.expander(f"{platform} - Open Positions", expanded=False):
                 platform_df = df[df["Platform"] == platform]
-                # Weighted average entry price for open positions
-                def weighted_avg(df, value_col, weight_col):
-                    return (df[value_col] * df[weight_col]).sum() / df[weight_col].sum() if df[weight_col].sum() else 0
+                # Simple average entry price for open positions (not weighted)
                 summary = (
                     platform_df
                     .groupby(["ticker"])
                     .apply(lambda g: pd.Series({
-                        "Avg Entry Price": weighted_avg(g, "entry_price", "quantity"),
+                        "Avg Entry Price": g["entry_price"].mean(),
                         "Total Quantity": g["quantity"].sum()
                     }))
                     .reset_index()
@@ -83,17 +81,14 @@ def positions_ui() -> None:
         for platform in sorted(df_closed["Platform"].unique()):
             with st.expander(f"{platform} - Closed Trades", expanded=False):
                 platform_df = df_closed[df_closed["Platform"] == platform]
-                # Weighted average entry price
-                def weighted_avg(df, value_col, weight_col):
-                    return (df[value_col] * df[weight_col]).sum() / df[weight_col].sum() if df[weight_col].sum() else 0
-
+                # Simple average entry price for closed positions (not weighted)
                 summary_closed = (
                     platform_df
                     .groupby("ticker")
                     .apply(lambda g: pd.Series({
-                        "Avg Entry Price": weighted_avg(g, "entry_price", "quantity"),
+                        "Avg Entry Price": g["entry_price"].mean(),
                         "Quantity": g["quantity"].sum(),
-                        "Avg Exit Price": weighted_avg(g, "exit_price", "quantity"),
+                        "Avg Exit Price": g["exit_price"].mean(),
                         "Profit/Loss": g["profit_loss"].sum()
                     }))
                     .reset_index()
@@ -115,46 +110,4 @@ def positions_ui() -> None:
                 st.dataframe(detail_df, use_container_width=True, hide_index=True)
     else:
         st.write("No closed trades found.")
-
-    # --- Combined Summary by Platform (Open + Closed Positions) ---
-    st.subheader("Combined Summary (Open + Closed Positions)")
-    # Prepare combined dataframe
-    combined_positions = []
-    if positions:
-        for p in positions:
-            p_copy = p.copy()
-            p_copy['position_type'] = 'open'
-            p_copy['exit_price'] = None
-            p_copy['profit_loss'] = 0.0
-            combined_positions.append(p_copy)
-    if closed_positions:
-        for p in closed_positions:
-            p_copy = p.copy()
-            p_copy['position_type'] = 'closed'
-            combined_positions.append(p_copy)
-    if combined_positions:
-        df_combined = pd.DataFrame(combined_positions)
-        if "platform_id" in df_combined.columns:
-            platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-            df_combined["Platform"] = df_combined["platform_id"].map(platform_map)
-        for platform in sorted(df_combined["Platform"].unique()):
-            with st.expander(f"{platform} - Combined Summary", expanded=False):
-                platform_df = df_combined[df_combined["Platform"] == platform]
-                def weighted_avg(df, value_col, weight_col):
-                    return (df[value_col] * df[weight_col]).sum() / df[weight_col].sum() if df[weight_col].sum() else 0
-                summary_combined = (
-                    platform_df
-                    .groupby(["ticker"])
-                    .apply(lambda g: pd.Series({
-                        "Avg Entry Price": weighted_avg(g, "entry_price", "quantity"),
-                        "Total Quantity": g["quantity"].sum(),
-                        "Total P/L": g["profit_loss"].sum()
-                    }))
-                    .reset_index()
-                )
-                summary_combined = summary_combined[["ticker", "Avg Entry Price", "Total Quantity", "Total P/L"]]
-                st.markdown("**Combined Summary by Ticker**")
-                st.dataframe(summary_combined, use_container_width=True, hide_index=True)
-    else:
-        st.write("No positions found for combined summary.")
 
