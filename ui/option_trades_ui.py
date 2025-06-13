@@ -39,8 +39,6 @@ def get_option_trades_summary() -> pd.DataFrame:
 
 def option_trades_ui() -> None:
     """Streamlit UI for viewing option trades. No data entry or closing form here."""
-    # Inject custom CSS to ensure table text is visible on a dark background
-
     st.title("📈 Option Trades")
     platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
     with st.spinner("Loading option trades..."):
@@ -58,9 +56,10 @@ def option_trades_ui() -> None:
             df_open = _map_and_reorder_columns(
                 df_open,
                 platform_map,
-                drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date"],
+                drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date","id"],
                 move_cols=["Platform", "open_fee"]
             )
+            st.dataframe(df_open, use_container_width=True, hide_index=True)
         else:
             st.info("No open option trades.")
         st.header("🔴 Closed Option Trades")
@@ -76,13 +75,14 @@ def option_trades_ui() -> None:
             df_closed = _map_and_reorder_columns(
                 df_closed,
                 platform_map,
-                drop_cols=[],
+                drop_cols=["id","status"],
                 move_cols=["Platform"]
             )
             if "profit_loss" in df_closed.columns:
                 df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
             if "entry_date" in df_closed.columns:
                 df_closed = df_closed.sort_values("entry_date")
+            st.dataframe(df_closed, use_container_width=True, hide_index=True)
         else:
             st.info("No closed option trades.")
 
