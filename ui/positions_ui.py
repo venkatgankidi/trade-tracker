@@ -46,10 +46,11 @@ def positions_ui() -> None:
                 platform_df = df[df["Platform"] == platform]
                 # Summary by ticker for this platform
                 summary = platform_df.groupby(["ticker"]).agg({
-                    "quantity": "sum",
-                    "entry_price": "mean"
+                    "entry_price": "mean",
+                    "quantity": "sum"
                 }).reset_index()
-                summary = summary.rename(columns={"quantity": "Total Quantity", "entry_price": "Avg Entry Price"})
+                summary = summary.rename(columns={"entry_price": "Avg Entry Price", "quantity": "Total Quantity"})
+                summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
                 st.markdown("**Summary by Ticker**")
                 st.dataframe(summary, use_container_width=True, hide_index=True)
                 # Detailed positions for this platform
@@ -78,15 +79,18 @@ def positions_ui() -> None:
                 platform_df = df_closed[df_closed["Platform"] == platform]
                 # Summary by ticker for this platform
                 summary_closed = platform_df.groupby(["ticker"]).agg({
+                    "entry_price": "mean",
                     "quantity": "sum",
-                    "profit_loss": "sum",
-                    "exit_price": "mean"
+                    "exit_price": "mean",
+                    "profit_loss": "sum"
                 }).reset_index()
                 summary_closed = summary_closed.rename(columns={
+                    "entry_price": "Avg Entry Price",
                     "quantity": "Total Quantity",
-                    "profit_loss": "Total P/L",
-                    "exit_price": "Avg Exit Price"
+                    "exit_price": "Avg Exit Price",
+                    "profit_loss": "Total P/L"
                 })
+                summary_closed = summary_closed[["ticker", "Avg Entry Price", "Total Quantity", "Avg Exit Price", "Total P/L"]]
                 st.markdown("**Summary by Ticker**")
                 st.dataframe(summary_closed, use_container_width=True, hide_index=True)
                 # Detailed closed positions for this platform
