@@ -17,8 +17,13 @@ def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], dro
     if "id" in df.columns:
         df = df.drop(columns=["id"], errors='ignore')
     cols = list(df.columns)
+    # Custom logic for open_fee after option_open_price
+    if "open_fee" in cols and "option_open_price" in cols:
+        cols.remove("open_fee")
+        idx = cols.index("option_open_price")
+        cols.insert(idx + 1, "open_fee")
     for col in move_cols:
-        if col in cols:
+        if col in cols and col not in ["open_fee"]:
             cols.insert(cols.index("ticker") + 1, cols.pop(cols.index(col)))
     for col in drop_cols:
         if col in df.columns:
@@ -57,7 +62,7 @@ def option_trades_ui() -> None:
                 df_open,
                 platform_map,
                 drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date","id"],
-                move_cols=["Platform"]
+                move_cols=["Platform", "open_fee"]
             )
             st.dataframe(df_open, use_container_width=True, hide_index=True)
         else:
