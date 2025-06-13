@@ -44,12 +44,18 @@ def positions_ui() -> None:
         for platform in sorted(df["Platform"].unique()):
             with st.expander(f"{platform} - Open Positions", expanded=False):
                 platform_df = df[df["Platform"] == platform]
-                # Summary by ticker for this platform
-                summary = platform_df.groupby(["ticker"]).agg({
-                    "entry_price": "mean",
-                    "quantity": "sum"
-                }).reset_index()
-                summary = summary.rename(columns={"entry_price": "Avg Entry Price", "quantity": "Total Quantity"})
+                # Weighted average entry price for open positions
+                def weighted_avg(df, value_col, weight_col):
+                    return (df[value_col] * df[weight_col]).sum() / df[weight_col].sum() if df[weight_col].sum() else 0
+                summary = (
+                    platform_df
+                    .groupby(["ticker"])
+                    .apply(lambda g: pd.Series({
+                        "Avg Entry Price": weighted_avg(g, "entry_price", "quantity"),
+                        "Total Quantity": g["quantity"].sum()
+                    }))
+                    .reset_index()
+                )
                 summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
                 st.markdown("**Summary by Ticker**")
                 st.dataframe(summary, use_container_width=True, hide_index=True)
