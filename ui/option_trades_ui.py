@@ -4,28 +4,6 @@ import datetime
 import pandas as pd
 from typing import Optional, List, Dict, Any
 
-# Inject custom CSS to ensure table text is visible on a dark background
-st.markdown(
-    """
-    <style>
-    /* Make table text visible and background dark for better contrast */
-    .stDataFrame, .stTable {
-        color: #fff !important;
-        background-color: #222 !important;
-    }
-    .stDataFrame tbody tr, .stTable tbody tr {
-        color: #fff !important;
-        background-color: #222 !important;
-    }
-    .stDataFrame th, .stTable th {
-        color: #fff !important;
-        background-color: #111 !important;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
 def _format_gain(x: Optional[float]) -> str:
     """Format gain/loss with color for display."""
     color = "green" if x and x > 0 else "red"
@@ -61,6 +39,27 @@ def get_option_trades_summary() -> pd.DataFrame:
 
 def option_trades_ui() -> None:
     """Streamlit UI for viewing option trades. No data entry or closing form here."""
+    # Inject custom CSS to ensure table text is visible on a dark background
+    st.markdown(
+        """
+        <style>
+        /* Make table text visible and background dark for better contrast */
+        .stDataFrame, .stTable {
+            color: #fff !important;
+            background-color: #222 !important;
+        }
+        .stDataFrame tbody tr, .stTable tbody tr {
+            color: #fff !important;
+            background-color: #222 !important;
+        }
+        .stDataFrame th, .stTable th {
+            color: #fff !important;
+            background-color: #111 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
     st.title("📈 Option Trades")
     platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
     with st.spinner("Loading option trades..."):
