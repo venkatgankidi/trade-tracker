@@ -76,7 +76,7 @@ def option_trades_ui() -> None:
                 df_closed,
                 platform_map,
                 drop_cols=["id","status"],
-                move_cols=["Platform"]
+                move_cols=["open_fee","notes"]
             )
             if "profit_loss" in df_closed.columns:
                 df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
