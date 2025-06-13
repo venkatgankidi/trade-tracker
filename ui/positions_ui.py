@@ -74,25 +74,27 @@ def positions_ui() -> None:
         if "platform_id" in df_closed.columns:
             platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
             df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
-        for platform in sorted(df_closed["Platform"].unique()):
-            with st.expander(f"{platform} - Closed Trades", expanded=False):
-                platform_df = df_closed[df_closed["Platform"] == platform]
-                # Summary by ticker for this platform
-                summary_closed = platform_df.groupby(["ticker"]).agg({
-                    "entry_price": "mean",
-                    "quantity": "sum",
-                    "exit_price": "mean",
-                    "profit_loss": "sum"
-                }).reset_index()
-                summary_closed = summary_closed.rename(columns={
-                    "entry_price": "Avg Entry Price",
-                    "quantity": "Total Quantity",
-                    "exit_price": "Avg Exit Price",
-                    "profit_loss": "Total P/L"
-                })
-                summary_closed = summary_closed[["ticker", "Avg Entry Price", "Total Quantity", "Avg Exit Price", "Total P/L"]]
-                st.markdown("**Summary by Ticker**")
-                st.dataframe(summary_closed, use_container_width=True, hide_index=True)
+            for platform in sorted(df_closed["Platform"].unique()):
+                with st.expander(f"{platform} - Closed Trades", expanded=False):
+                    platform_df = df_closed[df_closed["Platform"] == platform]
+                    # Weighted average entry price
+                    def weighted_avg(df, value_col, weight_col):
+                        return (df[value_col] * df[weight_col]).sum() / df[weight_col].sum() if df[weight_col].sum() else 0
+
+                    summary_closed = (
+                        platform_df
+                        .groupby("ticker")
+                        .apply(lambda g: pd.Series({
+                            "Avg Entry Price": weighted_avg(g, "entry_price", "quantity"),
+                            "Quantity": g["quantity"].sum(),
+                            "Avg Exit Price": weighted_avg(g, "exit_price", "quantity"),
+                            "Profit/Loss": g["profit_loss"].sum()
+                        }))
+                        .reset_index()
+                    )
+                    summary_closed = summary_closed[["ticker", "Avg Entry Price", "Quantity", "Avg Exit Price", "Profit/Loss"]]
+                    st.markdown("**Summary by Ticker**")
+                    st.dataframe(summary_closed, use_container_width=True, hide_index=True)
                 # Detailed closed positions for this platform
                 st.markdown("**Detailed Closed Positions**")
                 detail_df = platform_df.copy()
