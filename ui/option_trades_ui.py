@@ -40,26 +40,7 @@ def get_option_trades_summary() -> pd.DataFrame:
 def option_trades_ui() -> None:
     """Streamlit UI for viewing option trades. No data entry or closing form here."""
     # Inject custom CSS to ensure table text is visible on a dark background
-    st.markdown(
-        """
-        <style>
-        /* Make table text visible and background dark for better contrast */
-        .stDataFrame, .stTable {
-            color: #fff !important;
-            background-color: #222 !important;
-        }
-        .stDataFrame tbody tr, .stTable tbody tr {
-            color: #fff !important;
-            background-color: #222 !important;
-        }
-        .stDataFrame th, .stTable th {
-            color: #fff !important;
-            background-color: #111 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+
     st.title("📈 Option Trades")
     platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
     with st.spinner("Loading option trades..."):
@@ -79,12 +60,6 @@ def option_trades_ui() -> None:
                 platform_map,
                 drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date"],
                 move_cols=["Platform", "open_fee"]
-            )
-            st.markdown(
-                df_open.style.set_table_styles([
-                    {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#f6f6fa")]},
-                    {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]}]).to_html(escape=False, index=False),
-                unsafe_allow_html=True
             )
         else:
             st.info("No open option trades.")
@@ -108,12 +83,6 @@ def option_trades_ui() -> None:
                 df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
             if "entry_date" in df_closed.columns:
                 df_closed = df_closed.sort_values("entry_date")
-            st.markdown(
-                df_closed.style.set_table_styles([
-                    {"selector": "tbody tr:nth-child(even)", "props": [("background-color", "#f6f6fa")]},
-                    {"selector": "tbody tr:nth-child(odd)", "props": [("background-color", "#ffffff")]}]).to_html(escape=False, index=False),
-                unsafe_allow_html=True
-            )
         else:
             st.info("No closed option trades.")
 
