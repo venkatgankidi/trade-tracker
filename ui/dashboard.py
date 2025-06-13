@@ -6,40 +6,39 @@ from ui.taxes_ui import tax_summary
 import pandas as pd
 
 def dashboard():
-    st.header("Dashboard")
+    st.header("📊 Dashboard")
 
-    # Positions summary
-    st.subheader("Positions Summary")
-    pos_mgr_df = get_positions_summary()
-    if not pos_mgr_df.empty:
-        st.dataframe(pos_mgr_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No positions found for summary.")
-    st.write("---")
+    with st.spinner("Loading positions summary..."):
+        st.subheader("📈 Positions Summary")
+        pos_mgr_df = get_positions_summary()
+        if not pos_mgr_df.empty:
+            st.dataframe(pos_mgr_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No positions found for summary.")
+    st.markdown("---")
 
-    # Portfolio Summary
-    st.subheader("Portfolio Summary")
-    summary_df = get_position_summary_with_total()
-    if not summary_df.empty:
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No positions found for summary.")
-    st.write("---")
+    with st.spinner("Loading portfolio summary..."):
+        st.subheader("💼 Portfolio Summary")
+        summary_df = get_position_summary_with_total()
+        if not summary_df.empty:
+            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No positions found for summary.")
+    st.markdown("---")
 
-    # Option Trades summary
-    st.subheader("Option Trades Summary")
+    with st.spinner("Loading option trades summary..."):
+        st.subheader("📝 Option Trades Summary")
+        opt_df = get_option_trades_summary()
+        if not opt_df.empty:
+            st.dataframe(opt_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No option trades found for summary.")
+    st.markdown("---")
 
-    opt_df = get_option_trades_summary()
-    if not opt_df.empty:
-        st.dataframe(opt_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No option trades found for summary.")
-    st.write("---")
-
-    # Tax Summary (Yearly, no breakdown)
-    st.subheader("Tax Summary by Year")
-    summary_df = tax_summary()
-    if not summary_df.empty:
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No closed trades found for tax summary.")
+    with st.spinner("Loading tax summary..."):
+        st.subheader("💵 Tax Summary by Year")
+        summary_df = tax_summary()
+        if not summary_df.empty:
+            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No closed trades found for tax summary.")

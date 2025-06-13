@@ -1,24 +1,31 @@
 import streamlit as st
 from sqlalchemy import text
 import datetime
+import logging
+from typing import Any, Dict, Optional, List
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # --- PlatformCache and related functions (merged from db.py) ---
 class PlatformCache:
     def __init__(self):
-        self.cache = {}
+        self.cache: Dict[str, int] = {}
 
     def keys(self):
         return self.cache.keys()
 
-    def get(self, key):
+    def get(self, key: str) -> Optional[int]:
         return self.cache.get(key)
 
 PLATFORM_CACHE = PlatformCache()
 
 def get_st_connection():
+    """Get a Streamlit SQL connection object."""
     return st.connection("postgresql", type="sql")
 
-def load_platforms():
+def load_platforms() -> None:
+    """Load platforms from the database into the cache."""
     if not PLATFORM_CACHE.cache:
         try:
             conn = get_st_connection()
@@ -26,10 +33,25 @@ def load_platforms():
                 result = session.execute(text("SELECT id, name FROM platforms ORDER BY name DESC"))
                 PLATFORM_CACHE.cache = {row[1]: row[0] for row in result.fetchall()}
         except Exception as e:
-            print("Error connecting to the database:", e)
+            logger.error(f"Error connecting to the database: {e}")
+
+# --- Utility function for platform mapping ---
+def map_platform_id_to_name(platform_id: int, platform_cache: PlatformCache = PLATFORM_CACHE) -> Optional[str]:
+    """Map a platform_id to its name using the platform cache."""
+    id_to_name = {v: k for k, v in platform_cache.cache.items()}
+    return id_to_name.get(platform_id)
 
 # --- Existing db_utils.py functions for positions management ---
-def insert_position(ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id=None):
+def insert_position(
+    ticker: str,
+    trade_type: str,
+    position_status: str,
+    entry_price: float,
+    quantity: float,
+    entry_date: Any,
+    platform_id: Optional[int] = None
+) -> None:
+    """Insert a new position into the database."""
     conn = get_st_connection()
     with conn.session as session:
         session.execute(
@@ -50,7 +72,8 @@ def insert_position(ticker, trade_type, position_status, entry_price, quantity, 
         session.commit()
     st.cache_data.clear()
 
-def update_position(position_id, **kwargs):
+def update_position(position_id: int, **kwargs) -> None:
+    """Update a position in the database."""
     conn = get_st_connection()
     columns = []
     params = {}
@@ -69,7 +92,8 @@ def update_position(position_id, **kwargs):
     st.cache_data.clear()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def load_positions():
+def load_positions() -> List[Dict[str, Any]]:
+    """Load open positions from the database."""
     conn = get_st_connection()
     with conn.session as session:
         result = session.execute(
@@ -80,7 +104,8 @@ def load_positions():
         return [dict(zip(columns, row)) for row in rows]
 
 @st.cache_data(ttl=60, show_spinner=False)
-def load_closed_positions():
+def load_closed_positions() -> List[Dict[str, Any]]:
+    """Load closed positions from the database."""
     conn = get_st_connection()
     with conn.session as session:
         result = session.execute(text("SELECT id, ticker, trade_type, position_status, entry_price, quantity, exit_price, exit_date, entry_date, profit_loss, platform_id FROM positions WHERE position_status = 'close'"))
@@ -88,7 +113,19 @@ def load_closed_positions():
         columns = ["id", "ticker", "trade_type", "position_status", "entry_price", "quantity", "exit_price", "exit_date", "entry_date", "profit_loss", "platform_id"]
         return [dict(zip(columns, row)) for row in rows]
 
-def insert_option_trade(ticker, platform_id, strategy, strike_price, expiry_date, trade_date, transaction_type, option_open_price, notes=None, open_fee=0):
+def insert_option_trade(
+    ticker: str,
+    platform_id: int,
+    strategy: str,
+    strike_price: float,
+    expiry_date: Any,
+    trade_date: Any,
+    transaction_type: str,
+    option_open_price: float,
+    notes: Optional[str] = None,
+    open_fee: float = 0
+) -> None:
+    """Insert a new option trade into the database."""
     conn = get_st_connection()
     with conn.session as session:
         session.execute(
@@ -112,26 +149,28 @@ def insert_option_trade(ticker, platform_id, strategy, strike_price, expiry_date
         session.commit()
     st.cache_data.clear()
 
-def update_option_trade(trade_id, **kwargs):
+def update_option_trade(trade_id: int, **kwargs) -> None:
+    """Update an option trade in the database."""
     conn = get_st_connection()
     columns = []
-    values = []
+    params = {}
     for key, value in kwargs.items():
-        columns.append(f"{key} = %s")
-        values.append(value)
+        columns.append(f"{key} = :{key}")
+        params[key] = value
     if not columns:
         return
-    values.append(trade_id)
+    params["trade_id"] = trade_id
     with conn.session as session:
         session.execute(
             text(f"UPDATE option_trades SET {', '.join(columns)} WHERE id = :trade_id"),
-            {**dict(zip([col.split(' = ')[0] for col in columns], values[:-1])), "trade_id": values[-1]}
+            params
         )
         session.commit()
     st.cache_data.clear()
 
 @st.cache_data(ttl=60, show_spinner=False)
-def load_option_trades(status=None):
+def load_option_trades(status=None) -> List[Dict[str, Any]]:
+    """Load option trades from the database."""
     conn = get_st_connection()
     with conn.session as session:
         if status:

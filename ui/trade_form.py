@@ -1,7 +1,6 @@
 import streamlit as st
 from db.db_utils import PLATFORM_CACHE
 from sqlalchemy import text
-import time
 from typing import Optional
 
 def trade_form() -> None:
@@ -16,18 +15,18 @@ def trade_form() -> None:
         date = st.date_input("Date")
         trade_type: str = st.selectbox("Trade Type", ["Buy", "Sell"])
         submit_button = st.form_submit_button("Submit Trade")
-
+        error_msgs = []
         if submit_button:
-            # Input validation
             if not ticker.strip():
-                st.warning("Ticker cannot be empty.")
-                return
+                error_msgs.append("Ticker cannot be empty.")
             if purchase_price <= 0 or purchase_quantity <= 0:
-                st.warning("Price and quantity must be greater than zero.")
-                return
+                error_msgs.append("Price and quantity must be greater than zero.")
             platform_id: Optional[int] = PLATFORM_CACHE.get(platform)
             if platform_id is None:
-                st.error("Invalid platform selected.")
+                error_msgs.append("Invalid platform selected.")
+            if error_msgs:
+                for msg in error_msgs:
+                    st.warning(msg)
                 return
             trade_data = {
                 "ticker": ticker.strip().upper(),
@@ -46,7 +45,6 @@ def trade_form() -> None:
                     session.execute(sql, trade_data)
                     session.commit()
                 st.success("Trade added successfully!")
+                st.rerun()
             except Exception as e:
                 st.error(f"Error adding trade: {e}")
-            time.sleep(2)  # Shorter delay for better UX
-            st.rerun()
