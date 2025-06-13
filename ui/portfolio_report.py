@@ -106,7 +106,7 @@ def portfolio_ui() -> None:
                 st.write(f"**Platform:** {platform}")
                 display_df = group_df.copy()
                 display_df = display_df.sort_values("ticker")
-                display_df = display_df.drop(columns=["platform"])
+                display_df = display_df.drop(columns=["platform"], errors='ignore')
                 display_df["current_price"] = display_df["current_price"].apply(
                     lambda x: f'<span style="color: red">Not available</span>' if pd.isna(x) else f"${x:.2f}"
                 )

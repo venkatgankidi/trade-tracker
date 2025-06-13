@@ -13,16 +13,16 @@ def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], dro
     """Map platform_id to name, drop and reorder columns as needed."""
     if "platform_id" in df.columns:
         df["Platform"] = df["platform_id"].map(platform_map)
-        df = df.drop(columns=["platform_id"])
+        df = df.drop(columns=["platform_id"], errors='ignore')
     if "id" in df.columns:
-        df = df.drop(columns=["id"])
+        df = df.drop(columns=["id"], errors='ignore')
     cols = list(df.columns)
     for col in move_cols:
         if col in cols:
             cols.insert(cols.index("ticker") + 1, cols.pop(cols.index(col)))
     for col in drop_cols:
         if col in df.columns:
-            df = df.drop(columns=[col])
+            df = df.drop(columns=[col], errors='ignore')
     return df[cols]
 
 def get_option_trades_summary() -> pd.DataFrame:
