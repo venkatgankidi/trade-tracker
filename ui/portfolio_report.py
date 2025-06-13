@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from db.db_utils import PLATFORM_CACHE
+from db.db_utils import PLATFORM_CACHE, load_positions
 from sqlalchemy import text
 from typing import Optional
 import time
@@ -9,36 +9,32 @@ import time
 def _get_portfolio_df() -> pd.DataFrame:
     """
     Returns a DataFrame with portfolio holdings, including current price and unrealized gain/loss.
+    Uses open positions for accurate trade cost.
     """
-    conn = st.connection("postgresql", type="sql")
-    query = """
-SELECT platforms.name AS platform,
-       ticker,
-       SUM(CASE WHEN trade_type = 'Buy' THEN quantity ELSE -quantity END) AS total_quantity, 
-       AVG(price) AS average_price,
-       SUM(CASE WHEN trade_type = 'Buy' THEN price * quantity ELSE -price * quantity END) AS trade_cost
-FROM trades
-JOIN platforms ON trades.platform_id = platforms.id
-GROUP BY platforms.name, ticker
-    """
-    with conn.session as session:
-        result = session.execute(text(query))
-        rows = result.fetchall()
-        columns = ["platform", "ticker", "total_quantity", "average_price", "trade_cost"]
-        portfolio_df = pd.DataFrame(rows, columns=columns)
-    for col in ["total_quantity", "average_price", "trade_cost"]:
-        if col in portfolio_df.columns:
-            portfolio_df[col] = portfolio_df[col].astype(float)
-    portfolio_df = portfolio_df[portfolio_df["total_quantity"] > 0]
-
+    # Use open positions for accurate trade cost
+    open_positions = load_positions()
+    if not open_positions:
+        return pd.DataFrame(columns=["platform", "ticker", "total_quantity", "average_price", "trade_cost", "current_price", "current_value", "unrealized_gain", "percent_profit_loss"])
+    df = pd.DataFrame(open_positions)
+    platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+    df["platform"] = df["platform_id"].map(platform_map)
+    summary = (
+        df.groupby(["platform", "ticker"])
+        .apply(lambda g: pd.Series({
+            "total_quantity": g["quantity"].sum(),
+            "average_price": (g["entry_price"] * g["quantity"]).sum() / g["quantity"].sum() if g["quantity"].sum() else 0,
+            "trade_cost": (g["entry_price"] * g["quantity"]).sum()
+        }))
+        .reset_index()
+    )
     # Fetch current prices for each unique ticker only once, cache for 5 min
-    unique_tickers = portfolio_df["ticker"].unique()
+    unique_tickers = summary["ticker"].unique()
     ticker_price_map = _get_ticker_prices(unique_tickers)
-    portfolio_df["current_price"] = portfolio_df["ticker"].map(ticker_price_map)
-    portfolio_df["current_value"] = portfolio_df["current_price"] * portfolio_df["total_quantity"]
-    portfolio_df["unrealized_gain"] = portfolio_df["current_value"] - portfolio_df["trade_cost"]
-    portfolio_df["percent_profit_loss"] = (portfolio_df["unrealized_gain"] / portfolio_df["trade_cost"]) * 100
-    return portfolio_df
+    summary["current_price"] = summary["ticker"].map(ticker_price_map)
+    summary["current_value"] = summary["current_price"] * summary["total_quantity"]
+    summary["unrealized_gain"] = summary["current_value"] - summary["trade_cost"]
+    summary["percent_profit_loss"] = (summary["unrealized_gain"] / summary["trade_cost"]) * 100
+    return summary
 
 def get_position_summary() -> pd.DataFrame:
     """
