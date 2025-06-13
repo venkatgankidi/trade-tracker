@@ -23,7 +23,8 @@ def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], dro
     for col in drop_cols:
         if col in df.columns:
             df = df.drop(columns=[col], errors='ignore')
-    return df[cols]
+    # Only keep columns that exist in the DataFrame
+    return df[[c for c in cols if c in df.columns]]
 
 def get_option_trades_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for option trades (open/closed count and total P/L)."""
