@@ -44,12 +44,14 @@ def positions_ui() -> None:
         for platform in sorted(df["Platform"].unique()):
             with st.expander(f"{platform} - Open Positions", expanded=False):
                 platform_df = df[df["Platform"] == platform]
-                # Simple average entry price for open positions (not weighted)
+                # Weighted average entry price for open positions
+                def weighted_avg(df, value_col, weight_col):
+                    return (df[value_col] * df[weight_col]).sum() / df[weight_col].sum() if df[weight_col].sum() else 0
                 summary = (
                     platform_df
                     .groupby(["ticker"])
                     .apply(lambda g: pd.Series({
-                        "Avg Entry Price": g["entry_price"].mean(),
+                        "Avg Entry Price": weighted_avg(g, "entry_price", "quantity"),
                         "Total Quantity": g["quantity"].sum()
                     }))
                     .reset_index()
@@ -81,14 +83,16 @@ def positions_ui() -> None:
         for platform in sorted(df_closed["Platform"].unique()):
             with st.expander(f"{platform} - Closed Trades", expanded=False):
                 platform_df = df_closed[df_closed["Platform"] == platform]
-                # Simple average entry price for closed positions (not weighted)
+                # Weighted average entry price for closed positions
+                def weighted_avg(df, value_col, weight_col):
+                    return (df[value_col] * df[weight_col]).sum() / df[weight_col].sum() if df[weight_col].sum() else 0
                 summary_closed = (
                     platform_df
                     .groupby("ticker")
                     .apply(lambda g: pd.Series({
-                        "Avg Entry Price": g["entry_price"].mean(),
+                        "Avg Entry Price": weighted_avg(g, "entry_price", "quantity"),
                         "Quantity": g["quantity"].sum(),
-                        "Avg Exit Price": g["exit_price"].mean(),
+                        "Avg Exit Price": weighted_avg(g, "exit_price", "quantity"),
                         "Profit/Loss": g["profit_loss"].sum()
                     }))
                     .reset_index()
