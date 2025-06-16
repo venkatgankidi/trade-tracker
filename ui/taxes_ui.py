@@ -58,6 +58,10 @@ def aggregate_gains() -> Tuple[Dict[int, Dict[str, float]], Dict[Tuple[int, str,
         trade_date = _parse_date(opt.get("trade_date") or opt.get("entry_time"))
         close_date = _parse_date(opt.get("close_date") or opt.get("exit_time"))
         profit_loss = opt.get("profit_loss", 0) or 0
+        try:
+            profit_loss = float(profit_loss)
+        except Exception:
+            profit_loss = 0.0
         if not close_date or not trade_date:
             continue
         year = close_date.year
