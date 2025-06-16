@@ -24,7 +24,10 @@ def _parse_date(dt: Any) -> Optional[datetime.datetime]:
 def aggregate_gains() -> Tuple[Dict[int, Dict[str, float]], Dict[Tuple[int, str, str], float]]:
     """Aggregate gains for stocks and options, grouped by year and term."""
     closed_positions = load_closed_positions()
-    closed_options = load_option_trades(status="closed")
+    # Include all closed statuses for options
+    closed_options = []
+    for status in ["expired", "exercised", "closed"]:
+        closed_options += load_option_trades(status=status)
     yearly = {}
     yearly_breakdown = {}
     # Stocks

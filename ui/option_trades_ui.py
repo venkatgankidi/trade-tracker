@@ -34,7 +34,7 @@ def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], dro
 def get_option_trades_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for option trades (open/closed count and total P/L)."""
     open_trades = load_option_trades(status="open")
-    closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised") + load_option_trades(status="close")
+    closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised") + load_option_trades(status="closed")
     total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
     return pd.DataFrame([{
         "Open Option Trades": len(open_trades),
@@ -50,7 +50,7 @@ def option_trades_ui() -> None:
         closed_trades = (
             load_option_trades(status="expired") +
             load_option_trades(status="exercised") +
-            load_option_trades(status="close")
+            load_option_trades(status="closed")
         )
         total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
         st.subheader(f"💰 Total Profit/Loss (Closed Option Trades): {total_pnl:.2f}")
@@ -71,7 +71,7 @@ def option_trades_ui() -> None:
         closed_trades = (
             load_option_trades(status="expired") +
             load_option_trades(status="exercised") +
-            load_option_trades(status="close")
+            load_option_trades(status="closed")
         )
         if closed_trades:
             total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
