@@ -112,15 +112,16 @@ def portfolio_ui() -> None:
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
-                # Double bar chart: Value vs Unrealized Profit/Loss by Ticker
+                # Double bar chart: Value vs Unrealized Profit/Loss by Ticker (side by side)
                 if 'ticker' in display_df.columns and 'current_value' in display_df.columns and 'unrealized_gain' in display_df.columns:
                     melted = display_df.melt(id_vars=['ticker'], value_vars=['current_value', 'unrealized_gain'], var_name='Metric', value_name='Value')
                     chart = alt.Chart(melted).mark_bar().encode(
-                        x=alt.X('ticker:N', title='Ticker'),
+                        x=alt.X('ticker:N', title='Ticker', axis=alt.Axis(labelAngle=-45)),
                         y=alt.Y('Value:Q'),
                         color=alt.Color('Metric:N', title='Metric'),
+                        column=alt.Column('Metric:N', title=None, spacing=0),
                         tooltip=['ticker', 'Metric', 'Value']
-                    )
+                    ).properties(width=80)
                     st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No portfolio holdings found.")
