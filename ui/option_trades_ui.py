@@ -84,10 +84,15 @@ def option_trades_ui() -> None:
                 move_cols=["open_fee","notes"]
             )
             if "profit_loss" in df_closed.columns:
-                df_closed["profit_loss"] = df_closed["profit_loss"].apply(_format_gain)
+                def color_profit_loss(val):
+                    color = "green" if val > 0 else ("red" if val < 0 else "black")
+                    return f"color: {color}"
+                styled_df = df_closed.style.applymap(color_profit_loss, subset=["profit_loss"])
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(df_closed, use_container_width=True, hide_index=True)
             if "entry_date" in df_closed.columns:
                 df_closed = df_closed.sort_values("entry_date")
-            st.dataframe(df_closed, use_container_width=True, hide_index=True)
         else:
             st.info("No closed option trades.")
 

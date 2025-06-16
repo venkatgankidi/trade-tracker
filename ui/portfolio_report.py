@@ -107,18 +107,18 @@ def portfolio_ui() -> None:
                 display_df = group_df.copy()
                 display_df = display_df.sort_values("ticker")
                 display_df = display_df.drop(columns=["platform"], errors='ignore')
-                display_df["current_price"] = display_df["current_price"].apply(
-                    lambda x: f'<span style="color: red">Not available</span>' if pd.isna(x) else f"${x:.2f}"
-                )
-                display_df["current_value"] = display_df.apply(
-                    lambda row: f'<span style="color: red">Not available</span>' if pd.isna(row["current_price"]) or row["current_price"] == '<span style="color: red">Not available</span>' else f"${row['current_value']:.2f}", axis=1
-                )
-                display_df["unrealized_gain"] = display_df.apply(
-                    lambda row: '<span style="color: red">Not available</span>' if "Not available" in str(row["current_value"]) else _format_gain(row["unrealized_gain"]), axis=1
-                )
-                display_df["percent_profit_loss"] = display_df.apply(
-                    lambda row: '<span style="color: red">Not available</span>' if "Not available" in str(row["current_value"]) else _format_percent(row["percent_profit_loss"]), axis=1
-                )
-                st.markdown(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+                # Remove HTML formatting, use Styler for coloring
+                def color_gain(val):
+                    if pd.isna(val):
+                        return ''
+                    color = 'green' if val > 0 else ('red' if val < 0 else 'black')
+                    return f'color: {color}'
+                def color_percent(val):
+                    if pd.isna(val):
+                        return ''
+                    color = 'green' if val > 0 else ('red' if val < 0 else 'black')
+                    return f'color: {color}'
+                styled_df = display_df.style.applymap(color_gain, subset=["unrealized_gain"]).applymap(color_percent, subset=["percent_profit_loss"])
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.info("No portfolio holdings found.")
