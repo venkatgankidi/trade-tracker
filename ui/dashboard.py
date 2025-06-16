@@ -13,13 +13,6 @@ def dashboard():
         pos_mgr_df = get_positions_summary()
         if not pos_mgr_df.empty:
             st.dataframe(pos_mgr_df, use_container_width=True, hide_index=True)
-            # Bar chart: Open vs Closed Positions
-            chart = alt.Chart(pos_mgr_df.melt(var_name='Type', value_name='Count')).mark_bar().encode(
-                x=alt.X('Type:N', title='Position Type'),
-                y=alt.Y('Count:Q', title='Count'),
-                color='Type:N'
-            )
-            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -29,16 +22,14 @@ def dashboard():
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
-            # Bar chart: Portfolio Value and Unrealized Gains by Platform
-            if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns:
-                chart = alt.Chart(summary_df[summary_df['Platform'] != 'Total']).transform_fold(
-                    ['Total Portfolio Value', 'Total Unrealized Gains'],
-                    as_=['Metric', 'Value']
-                ).mark_bar().encode(
+            # Plot unrealized profit/loss over portfolio value as a ratio
+            if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns and 'Total Unrealized Gains' in summary_df.columns:
+                plot_df = summary_df[summary_df['Platform'] != 'Total'].copy()
+                plot_df['Unrealized P/L Ratio'] = plot_df['Total Unrealized Gains'] / plot_df['Total Portfolio Value']
+                chart = alt.Chart(plot_df).mark_bar().encode(
                     x=alt.X('Platform:N'),
-                    y=alt.Y('Value:Q'),
-                    color='Metric:N',
-                    column='Metric:N'
+                    y=alt.Y('Unrealized P/L Ratio:Q', title='Unrealized P/L over Portfolio Value'),
+                    color=alt.value('#4e79a7')
                 )
                 st.altair_chart(chart, use_container_width=True)
         else:
@@ -50,13 +41,6 @@ def dashboard():
         opt_df = get_option_trades_summary()
         if not opt_df.empty:
             st.dataframe(opt_df, use_container_width=True, hide_index=True)
-            # Bar chart: Open vs Closed Option Trades
-            chart = alt.Chart(opt_df.melt(var_name='Type', value_name='Count')).mark_bar().encode(
-                x=alt.X('Type:N', title='Option Trade Type'),
-                y=alt.Y('Count:Q', title='Count'),
-                color='Type:N'
-            )
-            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No option trades found for summary.")
     st.markdown("---")

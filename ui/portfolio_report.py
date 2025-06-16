@@ -96,18 +96,6 @@ def portfolio_ui() -> None:
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
-            # Bar chart: Portfolio Value and Unrealized Gains by Platform
-            if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns:
-                chart = alt.Chart(summary_df[summary_df['Platform'] != 'Total']).transform_fold(
-                    ['Total Portfolio Value', 'Total Unrealized Gains'],
-                    as_=['Metric', 'Value']
-                ).mark_bar().encode(
-                    x=alt.X('Platform:N'),
-                    y=alt.Y('Value:Q'),
-                    color='Metric:N',
-                    column='Metric:N'
-                )
-                st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -124,11 +112,11 @@ def portfolio_ui() -> None:
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
-                # Bar chart: Holdings by Ticker
-                if 'ticker' in display_df.columns and 'current_value' in display_df.columns:
+                # Bar chart: Unrealized Profit/Loss by Ticker
+                if 'ticker' in display_df.columns and 'unrealized_gain' in display_df.columns:
                     chart = alt.Chart(display_df).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
-                        y=alt.Y('current_value:Q', title='Current Value'),
+                        y=alt.Y('unrealized_gain:Q', title='Unrealized Profit/Loss'),
                         color=alt.value('#4e79a7')
                     )
                     st.altair_chart(chart, use_container_width=True)

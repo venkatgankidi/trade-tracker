@@ -98,16 +98,6 @@ def taxes_ui() -> None:
     if not summary_df.empty:
         st.subheader("Tax Summary by Year")
         st.dataframe(summary_df, use_container_width=True, hide_index=True)
-        # Line chart: Yearly Gain/Loss and Estimated Tax
-        chart = alt.Chart(summary_df).transform_fold(
-            ['Total Gain/Loss', 'Total Estimated Tax'],
-            as_=['Metric', 'Value']
-        ).mark_line(point=True).encode(
-            x=alt.X('Tax Year:O'),
-            y=alt.Y('Value:Q'),
-            color='Metric:N'
-        )
-        st.altair_chart(chart, use_container_width=True)
     else:
         st.info("No closed trades found for tax summary.")
     st.write("---")
@@ -116,7 +106,7 @@ def taxes_ui() -> None:
         for breakdown_key in sorted(yearly_breakdown):
             year, asset, term = breakdown_key
             gain = yearly_breakdown[breakdown_key]
-            tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
+            tax_rate = 0.15 if term == "Long Term" else 0.24
             tax = gain * tax_rate
             rows.append({
                 "Tax Year": year,
@@ -129,12 +119,12 @@ def taxes_ui() -> None:
         df = pd.DataFrame(rows)
         st.subheader("Summary by Tax Year, Asset, and Term")
         st.dataframe(df, use_container_width=True, hide_index=True)
-        # Stacked bar: Gain/Loss by Asset Type and Term
-        chart = alt.Chart(df).mark_bar().encode(
+        # Single stacked bar: Gain/Loss by Asset Type (long/short merged)
+        merged = df.groupby(['Tax Year', 'Asset Type'], as_index=False)['Gain/Loss'].sum()
+        chart = alt.Chart(merged).mark_bar().encode(
             x=alt.X('Tax Year:O'),
             y=alt.Y('Gain/Loss:Q', stack='zero'),
-            color=alt.Color('Asset Type:N'),
-            column=alt.Column('Term:N')
+            color=alt.Color('Asset Type:N')
         )
         st.altair_chart(chart, use_container_width=True)
     else:

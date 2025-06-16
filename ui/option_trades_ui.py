@@ -100,9 +100,9 @@ def option_trades_ui() -> None:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(df_closed, use_container_width=True, hide_index=True)
-            # Bar chart: Closed Option Trades P/L by Ticker
+            # Bar chart: Closed Option Trades P/L by Ticker (fix calculation)
             if 'ticker' in df_closed.columns and 'profit_loss' in df_closed.columns:
-                summary = df_closed.groupby('ticker')['profit_loss'].sum().reset_index()
+                summary = df_closed.groupby('ticker', as_index=False)['profit_loss'].sum()
                 chart = alt.Chart(summary).mark_bar().encode(
                     x=alt.X('ticker:N', title='Ticker'),
                     y=alt.Y('profit_loss:Q', title='Total Profit/Loss'),
