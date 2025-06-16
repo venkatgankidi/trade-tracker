@@ -112,16 +112,15 @@ def portfolio_ui() -> None:
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
-                # Bar + line chart: Current Value (bar) and Unrealized Gain/Loss (line) by Ticker
+                # Stacked bar chart: Value and Unrealized Profit/Loss by Ticker (like taxes graph)
                 if 'ticker' in display_df.columns and 'current_value' in display_df.columns and 'unrealized_gain' in display_df.columns:
-                    base = alt.Chart(display_df).encode(x=alt.X('ticker:N', title='Ticker'))
-                    bar = base.mark_bar(color='#4e79a7').encode(
-                        y=alt.Y('current_value:Q', title='Current Value')
+                    melted = display_df.melt(id_vars=['ticker'], value_vars=['current_value', 'unrealized_gain'], var_name='Metric', value_name='Value')
+                    chart = alt.Chart(melted).mark_bar().encode(
+                        x=alt.X('ticker:N', title='Ticker', axis=alt.Axis(labelAngle=-45)),
+                        y=alt.Y('Value:Q', stack='zero'),
+                        color=alt.Color('Metric:N', title='Metric'),
+                        tooltip=['ticker', 'Metric', 'Value']
                     )
-                    line = base.mark_line(color='#e15759', point=True).encode(
-                        y=alt.Y('unrealized_gain:Q', title='Unrealized Gain/Loss')
-                    )
-                    chart = alt.layer(bar, line).resolve_scale(y='independent')
                     st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No portfolio holdings found.")

@@ -22,17 +22,16 @@ def dashboard():
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
-            # Bar + line chart: Portfolio Value (bar) and Unrealized Gains (line) by Platform
+            # Stacked bar chart: Portfolio Value and Unrealized Gains by Platform (like taxes graph)
             if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns and 'Total Unrealized Gains' in summary_df.columns:
                 plot_df = summary_df[summary_df['Platform'] != 'Total'].copy()
-                base = alt.Chart(plot_df).encode(x=alt.X('Platform:N', title='Platform'))
-                bar = base.mark_bar(color='#4e79a7').encode(
-                    y=alt.Y('Total Portfolio Value:Q', title='Total Portfolio Value')
+                melted = plot_df.melt(id_vars=['Platform'], value_vars=['Total Portfolio Value', 'Total Unrealized Gains'], var_name='Metric', value_name='Value')
+                chart = alt.Chart(melted).mark_bar().encode(
+                    x=alt.X('Platform:N', title='Platform', axis=alt.Axis(labelAngle=-45)),
+                    y=alt.Y('Value:Q', stack='zero'),
+                    color=alt.Color('Metric:N', title='Metric'),
+                    tooltip=['Platform', 'Metric', 'Value']
                 )
-                line = base.mark_line(color='#e15759', point=True).encode(
-                    y=alt.Y('Total Unrealized Gains:Q', title='Unrealized Profit/Loss')
-                )
-                chart = alt.layer(bar, line).resolve_scale(y='independent')
                 st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No positions found for summary.")
