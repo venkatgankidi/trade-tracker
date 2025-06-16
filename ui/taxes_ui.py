@@ -71,8 +71,8 @@ def aggregate_gains() -> Tuple[Dict[int, Dict[str, float]], Dict[Tuple[int, str,
         yearly.setdefault(year, {"gain": 0, "tax": 0})
         yearly[year]["gain"] += profit_loss
         yearly[year]["tax"] += profit_loss * tax_rate
-        yearly_breakdown.setdefault((year, "Option", term), 0)
-        yearly_breakdown[(year, "Option", term)] += profit_loss
+        yearly_breakdown.setdefault((year, "Options", term), 0)
+        yearly_breakdown[(year, "Options", term)] += profit_loss
     return yearly, yearly_breakdown
 
 def tax_summary() -> pd.DataFrame:
