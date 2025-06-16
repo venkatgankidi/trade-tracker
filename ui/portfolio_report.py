@@ -112,12 +112,12 @@ def portfolio_ui() -> None:
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
                 st.dataframe(display_df, use_container_width=True, hide_index=True)
-                # Stacked bar chart: Value and Unrealized Profit/Loss by Ticker (like taxes graph)
+                # Line chart: Value and Unrealized Profit/Loss by Ticker (like taxes graph)
                 if 'ticker' in display_df.columns and 'current_value' in display_df.columns and 'unrealized_gain' in display_df.columns:
                     melted = display_df.melt(id_vars=['ticker'], value_vars=['current_value', 'unrealized_gain'], var_name='Metric', value_name='Value')
-                    chart = alt.Chart(melted).mark_bar().encode(
+                    chart = alt.Chart(melted).mark_line(point=True).encode(
                         x=alt.X('ticker:N', title='Ticker', axis=alt.Axis(labelAngle=-45)),
-                        y=alt.Y('Value:Q', stack='zero'),
+                        y=alt.Y('Value:Q'),
                         color=alt.Color('Metric:N', title='Metric'),
                         tooltip=['ticker', 'Metric', 'Value']
                     )
