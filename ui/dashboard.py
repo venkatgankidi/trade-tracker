@@ -22,14 +22,15 @@ def dashboard():
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
-            # Plot unrealized profit/loss over portfolio value as a ratio
+            # Bar chart: Portfolio Value vs Unrealized Gains by Platform
             if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns and 'Total Unrealized Gains' in summary_df.columns:
                 plot_df = summary_df[summary_df['Platform'] != 'Total'].copy()
-                plot_df['Unrealized P/L Ratio'] = plot_df['Total Unrealized Gains'] / plot_df['Total Portfolio Value']
-                chart = alt.Chart(plot_df).mark_bar().encode(
+                melted = plot_df.melt(id_vars=['Platform'], value_vars=['Total Portfolio Value', 'Total Unrealized Gains'], var_name='Metric', value_name='Value')
+                chart = alt.Chart(melted).mark_bar().encode(
                     x=alt.X('Platform:N'),
-                    y=alt.Y('Unrealized P/L Ratio:Q', title='Unrealized P/L over Portfolio Value'),
-                    color=alt.value('#4e79a7')
+                    y=alt.Y('Value:Q'),
+                    color=alt.Color('Metric:N'),
+                    column=alt.Column('Metric:N', spacing=10)
                 )
                 st.altair_chart(chart, use_container_width=True)
         else:
