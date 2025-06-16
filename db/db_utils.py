@@ -217,8 +217,9 @@ def close_option_trade(trade_id, status, close_date, option_close_price, notes=N
 
 def sync_positions_from_trades():
     """
-    Syncs the positions table with the trades table. Handles partial sells by matching sells to open buy lots (FIFO).
-    For each ticker/platform, creates closed positions for sold shares and open positions for remaining shares.
+    Optimized: Syncs the positions table with the trades table using batch inserts and minimal deletions.
+    Handles partial sells by matching sells to open buy lots (FIFO).
+    Only deletes positions for tickers/platforms being updated.
     """
     conn = get_st_connection()
     with conn.session as session:
@@ -229,7 +230,6 @@ def sync_positions_from_trades():
             ORDER BY ticker, platform_id, date, id
         '''))
         trades = result.fetchall()
-        # Group trades by (ticker, platform_id)
         from collections import defaultdict, deque
         trades_by_key = defaultdict(list)
         for row in trades:
@@ -240,11 +240,15 @@ def sync_positions_from_trades():
                 'date': date,
                 'trade_type': trade_type
             })
-        # Remove all positions before upsert
-        session.execute(text("DELETE FROM positions"))
+        # Prepare batch inserts and minimal deletions
+        all_keys = list(trades_by_key.keys())
+        # Delete only positions for tickers/platforms being updated
+        for ticker, platform_id in all_keys:
+            session.execute(text("DELETE FROM positions WHERE ticker = :ticker AND platform_id = :platform_id"), {"ticker": ticker, "platform_id": platform_id})
+        closed_positions = []
+        open_positions = []
         for (ticker, platform_id), trade_list in trades_by_key.items():
             open_lots = deque()
-            closed_positions = []
             for trade in trade_list:
                 if trade['trade_type'].lower() == 'buy':
                     open_lots.append({
@@ -257,19 +261,15 @@ def sync_positions_from_trades():
                     sell_qty = trade['quantity']
                     sell_price = trade['price']
                     sell_date = trade['date']
-                    # FIFO match sell to open lots
                     while sell_qty > 0 and open_lots:
                         lot = open_lots[0]
                         lot_qty = lot['remaining']
                         matched_qty = min(lot_qty, sell_qty)
                         profit_loss = (sell_price - lot['price']) * matched_qty
-                        # Insert closed position for matched_qty
-                        session.execute(text('''
-                            INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, exit_price, exit_date, platform_id, profit_loss)
-                            VALUES (:ticker, :trade_type, 'close', :entry_price, :quantity, :entry_date, :exit_price, :exit_date, :platform_id, :profit_loss)
-                        '''), {
+                        closed_positions.append({
                             'ticker': ticker,
                             'trade_type': None,
+                            'position_status': 'close',
                             'entry_price': lot['price'],
                             'quantity': matched_qty,
                             'entry_date': lot['entry_date'],
@@ -282,18 +282,57 @@ def sync_positions_from_trades():
                         sell_qty -= matched_qty
                         if lot['remaining'] == 0:
                             open_lots.popleft()
-                        # If sell_qty == 0, done
             # After all trades, any open_lots are open positions
             for lot in open_lots:
-                session.execute(text('''
-                    INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id, profit_loss)
-                    VALUES (:ticker, NULL, 'open', :entry_price, :quantity, :entry_date, :platform_id, NULL)
-                '''), {
+                open_positions.append({
                     'ticker': ticker,
+                    'trade_type': None,
+                    'position_status': 'open',
                     'entry_price': lot['price'],
                     'quantity': lot['remaining'],
                     'entry_date': lot['entry_date'],
-                    'platform_id': platform_id
+                    'platform_id': platform_id,
+                    'profit_loss': None
                 })
+        # Batch insert closed positions
+        if closed_positions:
+            session.execute(text('''
+                INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, exit_price, exit_date, platform_id, profit_loss)
+                VALUES 
+                ''' + ',\n'.join([
+                    f"(:ticker{i}, :trade_type{i}, :position_status{i}, :entry_price{i}, :quantity{i}, :entry_date{i}, :exit_price{i}, :exit_date{i}, :platform_id{i}, :profit_loss{i})"
+                    for i in range(len(closed_positions))
+                ])), {
+                    **{f"ticker{i}": p['ticker'] for i, p in enumerate(closed_positions)},
+                    **{f"trade_type{i}": p['trade_type'] for i, p in enumerate(closed_positions)},
+                    **{f"position_status{i}": p['position_status'] for i, p in enumerate(closed_positions)},
+                    **{f"entry_price{i}": p['entry_price'] for i, p in enumerate(closed_positions)},
+                    **{f"quantity{i}": p['quantity'] for i, p in enumerate(closed_positions)},
+                    **{f"entry_date{i}": p['entry_date'] for i, p in enumerate(closed_positions)},
+                    **{f"exit_price{i}": p['exit_price'] for i, p in enumerate(closed_positions)},
+                    **{f"exit_date{i}": p['exit_date'] for i, p in enumerate(closed_positions)},
+                    **{f"platform_id{i}": p['platform_id'] for i, p in enumerate(closed_positions)},
+                    **{f"profit_loss{i}": p['profit_loss'] for i, p in enumerate(closed_positions)},
+                }
+            )
+        # Batch insert open positions
+        if open_positions:
+            session.execute(text('''
+                INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id, profit_loss)
+                VALUES 
+                ''' + ',\n'.join([
+                    f"(:ticker{i}, :trade_type{i}, :position_status{i}, :entry_price{i}, :quantity{i}, :entry_date{i}, :platform_id{i}, :profit_loss{i})"
+                    for i in range(len(open_positions))
+                ])), {
+                    **{f"ticker{i}": p['ticker'] for i, p in enumerate(open_positions)},
+                    **{f"trade_type{i}": p['trade_type'] for i, p in enumerate(open_positions)},
+                    **{f"position_status{i}": p['position_status'] for i, p in enumerate(open_positions)},
+                    **{f"entry_price{i}": p['entry_price'] for i, p in enumerate(open_positions)},
+                    **{f"quantity{i}": p['quantity'] for i, p in enumerate(open_positions)},
+                    **{f"entry_date{i}": p['entry_date'] for i, p in enumerate(open_positions)},
+                    **{f"platform_id{i}": p['platform_id'] for i, p in enumerate(open_positions)},
+                    **{f"profit_loss{i}": p['profit_loss'] for i, p in enumerate(open_positions)},
+                }
+            )
         session.commit()
     st.cache_data.clear()
