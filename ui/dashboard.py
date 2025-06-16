@@ -3,7 +3,7 @@ from ui.positions_ui import get_positions_summary
 from ui.portfolio_report import get_position_summary_with_total
 from ui.option_trades_ui import get_option_trades_summary
 from ui.taxes_ui import tax_summary
-import pandas as pd
+import altair as alt
 
 def dashboard():
     st.header("📊 Dashboard")
@@ -13,6 +13,13 @@ def dashboard():
         pos_mgr_df = get_positions_summary()
         if not pos_mgr_df.empty:
             st.dataframe(pos_mgr_df, use_container_width=True, hide_index=True)
+            # Bar chart: Open vs Closed Positions
+            chart = alt.Chart(pos_mgr_df.melt(var_name='Type', value_name='Count')).mark_bar().encode(
+                x=alt.X('Type:N', title='Position Type'),
+                y=alt.Y('Count:Q', title='Count'),
+                color='Type:N'
+            )
+            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -22,6 +29,18 @@ def dashboard():
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            # Bar chart: Portfolio Value and Unrealized Gains by Platform
+            if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns:
+                chart = alt.Chart(summary_df[summary_df['Platform'] != 'Total']).transform_fold(
+                    ['Total Portfolio Value', 'Total Unrealized Gains'],
+                    as_=['Metric', 'Value']
+                ).mark_bar().encode(
+                    x=alt.X('Platform:N'),
+                    y=alt.Y('Value:Q'),
+                    color='Metric:N',
+                    column='Metric:N'
+                )
+                st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -31,6 +50,13 @@ def dashboard():
         opt_df = get_option_trades_summary()
         if not opt_df.empty:
             st.dataframe(opt_df, use_container_width=True, hide_index=True)
+            # Bar chart: Open vs Closed Option Trades
+            chart = alt.Chart(opt_df.melt(var_name='Type', value_name='Count')).mark_bar().encode(
+                x=alt.X('Type:N', title='Option Trade Type'),
+                y=alt.Y('Count:Q', title='Count'),
+                color='Type:N'
+            )
+            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No option trades found for summary.")
     st.markdown("---")
@@ -40,5 +66,15 @@ def dashboard():
         summary_df = tax_summary()
         if not summary_df.empty:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            # Line chart: Yearly Gain/Loss and Estimated Tax
+            chart = alt.Chart(summary_df).transform_fold(
+                ['Total Gain/Loss', 'Total Estimated Tax'],
+                as_=['Metric', 'Value']
+            ).mark_line(point=True).encode(
+                x=alt.X('Tax Year:O'),
+                y=alt.Y('Value:Q'),
+                color='Metric:N'
+            )
+            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No closed trades found for tax summary.")

@@ -1,8 +1,9 @@
 import streamlit as st
-from db.db_utils import load_positions, insert_position, update_position, load_closed_positions, sync_positions_from_trades
+from db.db_utils import load_positions, load_closed_positions, sync_positions_from_trades
 from db.db_utils import PLATFORM_CACHE
 import pandas as pd
-from typing import Optional, List, Dict, Any
+from typing import Optional, List
+import altair as alt
 
 def _weighted_avg(df: pd.DataFrame, value_col: str, weight_col: str) -> float:
     """Compute weighted average for a DataFrame column."""
@@ -59,13 +60,19 @@ def positions_ui() -> None:
                     summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
                     st.markdown("**Summary by Ticker**")
                     st.dataframe(summary, use_container_width=True, hide_index=True)
+                    # Bar chart: Open Positions by Ticker
+                    chart = alt.Chart(summary).mark_bar().encode(
+                        x=alt.X('ticker:N', title='Ticker'),
+                        y=alt.Y('Total Quantity:Q', title='Quantity'),
+                        color=alt.value('#59a14f')
+                    )
+                    st.altair_chart(chart, use_container_width=True)
                     st.markdown("**Detailed Positions**")
                     detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
                     st.dataframe(detail_df, use_container_width=True, hide_index=True)
         else:
-            st.info("No open positions found.")
-        st.markdown("---")
-        st.subheader("🔴 Closed Trades")
+            st.info("No open positions.")
+        st.subheader("🔴 Closed Positions")
         if closed_positions:
             df_closed = pd.DataFrame(closed_positions)
             if "platform_id" in df_closed.columns:
@@ -88,9 +95,16 @@ def positions_ui() -> None:
                     summary_closed = summary_closed[["ticker", "Avg Entry Price", "Quantity", "Avg Exit Price", "Profit/Loss"]]
                     st.markdown("**Summary by Ticker**")
                     st.dataframe(summary_closed, use_container_width=True, hide_index=True)
+                    # Bar chart: Closed Positions Profit/Loss by Ticker
+                    chart = alt.Chart(summary_closed).mark_bar().encode(
+                        x=alt.X('ticker:N', title='Ticker'),
+                        y=alt.Y('Profit/Loss:Q', title='Total Profit/Loss'),
+                        color=alt.value('#e15759')
+                    )
+                    st.altair_chart(chart, use_container_width=True)
                     st.markdown("**Detailed Closed Positions**")
                     detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
                     st.dataframe(detail_df, use_container_width=True, hide_index=True)
         else:
-            st.info("No closed trades found.")
+            st.info("No closed positions.")
 

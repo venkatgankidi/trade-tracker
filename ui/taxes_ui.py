@@ -1,14 +1,14 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import altair as alt
 from db.db_utils import load_closed_positions, load_option_trades
-from typing import Any, Dict, Tuple, Optional
 
 LONG_TERM_TAX_RATE = 0.15
 SHORT_TERM_TAX_RATE = 0.24
 LONG_TERM_DAYS = 365
 
-def _parse_date(dt: Any) -> Optional[datetime.datetime]:
+def _parse_date(dt):
     """Parse a date from string, date, or datetime."""
     if isinstance(dt, str):
         try:
@@ -21,7 +21,7 @@ def _parse_date(dt: Any) -> Optional[datetime.datetime]:
         return dt
     return None
 
-def aggregate_gains() -> Tuple[Dict[int, Dict[str, float]], Dict[Tuple[int, str, str], float]]:
+def aggregate_gains():
     """Aggregate gains for stocks and options, grouped by year and term."""
     closed_positions = load_closed_positions()
     # Include all closed statuses for options
@@ -75,7 +75,7 @@ def aggregate_gains() -> Tuple[Dict[int, Dict[str, float]], Dict[Tuple[int, str,
         yearly_breakdown[(year, "Options", term)] += profit_loss
     return yearly, yearly_breakdown
 
-def tax_summary() -> pd.DataFrame:
+def tax_summary():
     """Return a DataFrame summary of tax by year."""
     yearly, _ = aggregate_gains()
     if yearly:
@@ -98,6 +98,16 @@ def taxes_ui() -> None:
     if not summary_df.empty:
         st.subheader("Tax Summary by Year")
         st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        # Line chart: Yearly Gain/Loss and Estimated Tax
+        chart = alt.Chart(summary_df).transform_fold(
+            ['Total Gain/Loss', 'Total Estimated Tax'],
+            as_=['Metric', 'Value']
+        ).mark_line(point=True).encode(
+            x=alt.X('Tax Year:O'),
+            y=alt.Y('Value:Q'),
+            color='Metric:N'
+        )
+        st.altair_chart(chart, use_container_width=True)
     else:
         st.info("No closed trades found for tax summary.")
     st.write("---")
@@ -119,5 +129,13 @@ def taxes_ui() -> None:
         df = pd.DataFrame(rows)
         st.subheader("Summary by Tax Year, Asset, and Term")
         st.dataframe(df, use_container_width=True, hide_index=True)
+        # Stacked bar: Gain/Loss by Asset Type and Term
+        chart = alt.Chart(df).mark_bar().encode(
+            x=alt.X('Tax Year:O'),
+            y=alt.Y('Gain/Loss:Q', stack='zero'),
+            color=alt.Color('Asset Type:N'),
+            column=alt.Column('Term:N')
+        )
+        st.altair_chart(chart, use_container_width=True)
     else:
         st.info("No closed trades found for capital gains calculation.")

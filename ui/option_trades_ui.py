@@ -1,8 +1,9 @@
 import streamlit as st
-from db.db_utils import PLATFORM_CACHE, insert_option_trade, load_option_trades, close_option_trade
+from db.db_utils import PLATFORM_CACHE, insert_option_trade, load_option_trades
 import datetime
 import pandas as pd
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
+import altair as alt
 
 def _format_gain(x: Optional[float]) -> str:
     """Format gain/loss with color for display."""
@@ -65,6 +66,14 @@ def option_trades_ui() -> None:
                 move_cols=["Platform", "open_fee"]
             )
             st.dataframe(df_open, use_container_width=True, hide_index=True)
+            # Bar chart: Open Option Trades by Ticker
+            if 'ticker' in df_open.columns:
+                chart = alt.Chart(df_open).mark_bar().encode(
+                    x=alt.X('ticker:N', title='Ticker'),
+                    y=alt.Y('count():Q', title='Open Trades'),
+                    color=alt.value('#4e79a7')
+                )
+                st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No open option trades.")
         st.header("🔴 Closed Option Trades")
@@ -91,8 +100,15 @@ def option_trades_ui() -> None:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(df_closed, use_container_width=True, hide_index=True)
-            if "entry_date" in df_closed.columns:
-                df_closed = df_closed.sort_values("entry_date")
+            # Bar chart: Closed Option Trades P/L by Ticker
+            if 'ticker' in df_closed.columns and 'profit_loss' in df_closed.columns:
+                summary = df_closed.groupby('ticker')['profit_loss'].sum().reset_index()
+                chart = alt.Chart(summary).mark_bar().encode(
+                    x=alt.X('ticker:N', title='Ticker'),
+                    y=alt.Y('profit_loss:Q', title='Total Profit/Loss'),
+                    color=alt.value('#f28e2b')
+                )
+                st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No closed option trades.")
 

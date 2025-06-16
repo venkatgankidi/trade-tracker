@@ -2,7 +2,8 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_positions
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
+import altair as alt
 
 def _format_gain(x: float) -> str:
     color = "green" if x > 0 else "red"
@@ -95,6 +96,18 @@ def portfolio_ui() -> None:
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            # Bar chart: Portfolio Value and Unrealized Gains by Platform
+            if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns:
+                chart = alt.Chart(summary_df[summary_df['Platform'] != 'Total']).transform_fold(
+                    ['Total Portfolio Value', 'Total Unrealized Gains'],
+                    as_=['Metric', 'Value']
+                ).mark_bar().encode(
+                    x=alt.X('Platform:N'),
+                    y=alt.Y('Value:Q'),
+                    color='Metric:N',
+                    column='Metric:N'
+                )
+                st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -110,17 +123,14 @@ def portfolio_ui() -> None:
                 # Format percent_profit_loss as a string with %
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
-                def color_gain(val):
-                    if pd.isna(val):
-                        return ''
-                    color = 'green' if val > 0 else ('red' if val < 0 else 'black')
-                    return f'color: {color}'
-                def color_percent(val):
-                    if pd.isna(val):
-                        return ''
-                    color = 'green' if float(str(val).replace('%','')) > 0 else ('red' if float(str(val).replace('%','')) < 0 else 'black')
-                    return f'color: {color}'
-                styled_df = display_df.style.applymap(color_gain, subset=["unrealized_gain"]).applymap(color_percent, subset=["percent_profit_loss"])
-                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                st.dataframe(display_df, use_container_width=True, hide_index=True)
+                # Bar chart: Holdings by Ticker
+                if 'ticker' in display_df.columns and 'current_value' in display_df.columns:
+                    chart = alt.Chart(display_df).mark_bar().encode(
+                        x=alt.X('ticker:N', title='Ticker'),
+                        y=alt.Y('current_value:Q', title='Current Value'),
+                        color=alt.value('#4e79a7')
+                    )
+                    st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No portfolio holdings found.")
