@@ -107,7 +107,9 @@ def portfolio_ui() -> None:
                 display_df = group_df.copy()
                 display_df = display_df.sort_values("ticker")
                 display_df = display_df.drop(columns=["platform"], errors='ignore')
-                # Remove HTML formatting, use Styler for coloring
+                # Format percent_profit_loss as a string with %
+                if "percent_profit_loss" in display_df.columns:
+                    display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
                 def color_gain(val):
                     if pd.isna(val):
                         return ''
@@ -116,7 +118,7 @@ def portfolio_ui() -> None:
                 def color_percent(val):
                     if pd.isna(val):
                         return ''
-                    color = 'green' if val > 0 else ('red' if val < 0 else 'black')
+                    color = 'green' if float(str(val).replace('%','')) > 0 else ('red' if float(str(val).replace('%','')) < 0 else 'black')
                     return f'color: {color}'
                 styled_df = display_df.style.applymap(color_gain, subset=["unrealized_gain"]).applymap(color_percent, subset=["percent_profit_loss"])
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
