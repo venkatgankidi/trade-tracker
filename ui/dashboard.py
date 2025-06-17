@@ -3,7 +3,6 @@ from ui.positions_ui import get_positions_summary
 from ui.portfolio_report import get_position_summary_with_total
 from ui.option_trades_ui import get_option_trades_summary
 from ui.taxes_ui import tax_summary
-import altair as alt
 
 def dashboard():
     st.header("📊 Dashboard")
@@ -33,7 +32,7 @@ def dashboard():
         st.subheader("💼 Portfolio Summary")
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
-            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "percent_profit_loss", "unrealized_gain", "total unrealized gains", "pct_unrealized_gain"]]
+            highlight_cols = [col for col in summary_df.columns if col.lower() in ["total unrealized gains", "pct unrealized gain"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:
@@ -54,7 +53,7 @@ def dashboard():
         st.subheader("📝 Option Trades Summary")
         opt_df = get_option_trades_summary()
         if not opt_df.empty:
-            highlight_cols = [col for col in opt_df.columns if col.lower() in ["profit_loss", "gain", "total option p/l (closed)", "pct_unrealized_gain"]]
+            highlight_cols = [col for col in opt_df.columns if col.lower() in ["profit_loss", "gain", "total option p/l (closed)"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:
@@ -75,7 +74,7 @@ def dashboard():
         st.subheader("💵 Tax Summary by Year")
         summary_df = tax_summary()
         if not summary_df.empty:
-            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "total gain/loss", "gain/loss", "pct_unrealized_gain"]]
+            highlight_cols = [col for col in summary_df.columns if col.lower() in ["total gain/loss","total estimated tax"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:

@@ -66,7 +66,7 @@ def option_trades_ui() -> None:
                 move_cols=["Platform", "open_fee"]
             )
             # Highlight profit/loss columns if present
-            highlight_cols = [col for col in df_open.columns if col in ["profit_loss", "gain", "percentage"]]
+            highlight_cols = [col for col in df_open.columns if col in ["profit_loss"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     color = "green" if val > 0 else ("red" if val < 0 else "black")

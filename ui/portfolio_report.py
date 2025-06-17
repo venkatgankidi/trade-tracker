@@ -5,14 +5,6 @@ from db.db_utils import PLATFORM_CACHE, load_positions
 from typing import Optional, List, Dict
 import altair as alt
 
-def _format_gain(x: float) -> str:
-    color = "green" if x > 0 else "red"
-    return f'<span style="color: {color}">{x:.2f}</span>'
-
-def _format_percent(x: float) -> str:
-    color = "green" if x > 0 else "red"
-    return f'<span style="color: {color}">{x:.2f}%</span>'
-
 @st.cache_data(ttl=300, show_spinner=False)
 def _get_ticker_prices(tickers: List[str]) -> Dict[str, Optional[float]]:
     """Fetch current prices for a list of tickers using yfinance. Cached for 5 minutes."""
@@ -95,7 +87,7 @@ def portfolio_ui() -> None:
         st.subheader("📊 Portfolio Summary")
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
-            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain", "total unrealized gains", "total p/l (closed)", "pct unrealized gain", "pct_unrealized_gain"]]
+            highlight_cols = [col for col in summary_df.columns if col.lower() in ["total unrealized gains", "pct unrealized gain"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:
@@ -122,7 +114,7 @@ def portfolio_ui() -> None:
                 display_df = display_df.drop(columns=["platform"], errors='ignore')
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
-                highlight_cols = [col for col in display_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain", "pct unrealized gain", "pct_unrealized_gain"]]
+                highlight_cols = [col for col in display_df.columns if col.lower() in [ "percent_profit_loss", "unrealized_gain"]]
                 if highlight_cols:
                     def color_profit_loss(val):
                         try:

@@ -59,19 +59,7 @@ def positions_ui() -> None:
                     )
                     summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
                     st.markdown("**Summary by Ticker**")
-                    highlight_cols = [col for col in summary.columns if col.lower() in ["profit_loss", "gain", "percentage", "total p/l (closed)", "profit/loss"]]
-                    if highlight_cols:
-                        def color_profit_loss(val):
-                            try:
-                                v = float(str(val).replace('%',''))
-                            except:
-                                return ""
-                            color = "green" if v > 0 else ("red" if v < 0 else "black")
-                            return f"color: {color}"
-                        styled_df = summary.style.applymap(color_profit_loss, subset=highlight_cols)
-                        st.dataframe(styled_df, use_container_width=True, hide_index=True)
-                    else:
-                        st.dataframe(summary, use_container_width=True, hide_index=True)
+                    st.dataframe(summary, use_container_width=True, hide_index=True)
                     # Bar chart: Open Positions by Ticker
                     chart = alt.Chart(summary).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
@@ -106,7 +94,7 @@ def positions_ui() -> None:
                     )
                     summary_closed = summary_closed[["ticker", "Avg Entry Price", "Quantity", "Avg Exit Price", "Profit/Loss"]]
                     st.markdown("**Summary by Ticker**")
-                    highlight_cols = [col for col in summary_closed.columns if col.lower() in ["profit_loss", "gain", "percentage", "total p/l (closed)", "profit/loss"]]
+                    highlight_cols = [col for col in summary_closed.columns if col.lower() in ["profit/loss"]]
                     if highlight_cols:
                         def color_profit_loss(val):
                             try:
