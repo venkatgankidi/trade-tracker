@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS option_trades (
     option_close_price NUMERIC(12, 4),
     close_fee NUMERIC(10, 4) DEFAULT 0,
     profit_loss NUMERIC(12, 4),
-    status VARCHAR(16) CHECK (status IN ('open', 'expired', 'exercised','close')) DEFAULT 'open',
+    status VARCHAR(16) CHECK (status IN ('open', 'expired', 'exercised','closed')) DEFAULT 'open',
     close_date DATE,
     notes TEXT
 );

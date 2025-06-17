@@ -66,14 +66,6 @@ def option_trades_ui() -> None:
                 move_cols=["Platform", "open_fee"]
             )
             st.dataframe(df_open, use_container_width=True, hide_index=True)
-            # Bar chart: Open Option Trades by Ticker
-            if 'ticker' in df_open.columns:
-                chart = alt.Chart(df_open).mark_bar().encode(
-                    x=alt.X('ticker:N', title='Ticker'),
-                    y=alt.Y('count():Q', title='Open Trades'),
-                    color=alt.value('#4e79a7')
-                )
-                st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No open option trades.")
         st.header("🔴 Closed Option Trades")
