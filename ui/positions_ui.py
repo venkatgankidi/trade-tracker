@@ -59,7 +59,19 @@ def positions_ui() -> None:
                     )
                     summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
                     st.markdown("**Summary by Ticker**")
-                    st.dataframe(summary, use_container_width=True, hide_index=True)
+                    highlight_cols = [col for col in summary.columns if col.lower() in ["profit_loss", "gain", "percentage", "total p/l (closed)", "profit/loss"]]
+                    if highlight_cols:
+                        def color_profit_loss(val):
+                            try:
+                                v = float(str(val).replace('%',''))
+                            except:
+                                return ""
+                            color = "green" if v > 0 else ("red" if v < 0 else "black")
+                            return f"color: {color}"
+                        styled_df = summary.style.applymap(color_profit_loss, subset=highlight_cols)
+                        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.dataframe(summary, use_container_width=True, hide_index=True)
                     # Bar chart: Open Positions by Ticker
                     chart = alt.Chart(summary).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
@@ -68,7 +80,6 @@ def positions_ui() -> None:
                     )
                     st.altair_chart(chart, use_container_width=True)
                     st.markdown("**Detailed Positions**")
-                    detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
                     st.dataframe(detail_df, use_container_width=True, hide_index=True)
         else:
             st.info("No open positions.")
@@ -94,7 +105,19 @@ def positions_ui() -> None:
                     )
                     summary_closed = summary_closed[["ticker", "Avg Entry Price", "Quantity", "Avg Exit Price", "Profit/Loss"]]
                     st.markdown("**Summary by Ticker**")
-                    st.dataframe(summary_closed, use_container_width=True, hide_index=True)
+                    highlight_cols = [col for col in summary_closed.columns if col.lower() in ["profit_loss", "gain", "percentage", "total p/l (closed)", "profit/loss"]]
+                    if highlight_cols:
+                        def color_profit_loss(val):
+                            try:
+                                v = float(str(val).replace('%',''))
+                            except:
+                                return ""
+                            color = "green" if v > 0 else ("red" if v < 0 else "black")
+                            return f"color: {color}"
+                        styled_df = summary_closed.style.applymap(color_profit_loss, subset=highlight_cols)
+                        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                    else:
+                        st.dataframe(summary_closed, use_container_width=True, hide_index=True)
                     # Bar chart: Closed Positions Profit/Loss by Ticker
                     chart = alt.Chart(summary_closed).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),

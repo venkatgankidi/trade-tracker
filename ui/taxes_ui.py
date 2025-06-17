@@ -97,7 +97,19 @@ def taxes_ui() -> None:
     summary_df = tax_summary()
     if not summary_df.empty:
         st.subheader("Tax Summary by Year")
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "total gain/loss", "gain/loss"]]
+        if highlight_cols:
+            def color_profit_loss(val):
+                try:
+                    v = float(str(val).replace('%',''))
+                except:
+                    return ""
+                color = "green" if v > 0 else ("red" if v < 0 else "black")
+                return f"color: {color}"
+            styled_df = summary_df.style.applymap(color_profit_loss, subset=highlight_cols)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(summary_df, use_container_width=True, hide_index=True)
     else:
         st.info("No closed trades found for tax summary.")
     st.write("---")
@@ -118,14 +130,18 @@ def taxes_ui() -> None:
             })
         df = pd.DataFrame(rows)
         st.subheader("Summary by Tax Year, Asset, and Term")
-        st.dataframe(df, use_container_width=True, hide_index=True)
-        # Single stacked bar: Gain/Loss by Asset Type (long/short merged)
-        merged = df.groupby(['Tax Year', 'Asset Type'], as_index=False)['Gain/Loss'].sum()
-        chart = alt.Chart(merged).mark_bar().encode(
-            x=alt.X('Tax Year:O'),
-            y=alt.Y('Gain/Loss:Q', stack='zero'),
-            color=alt.Color('Asset Type:N')
-        )
-        st.altair_chart(chart, use_container_width=True)
+        highlight_cols = [col for col in df.columns if col.lower() in ["profit_loss", "gain", "total gain/loss", "gain/loss"]]
+        if highlight_cols:
+            def color_profit_loss(val):
+                try:
+                    v = float(str(val).replace('%',''))
+                except:
+                    return ""
+                color = "green" if v > 0 else ("red" if v < 0 else "black")
+                return f"color: {color}"
+            styled_df = df.style.applymap(color_profit_loss, subset=highlight_cols)
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        else:
+            st.dataframe(df, use_container_width=True, hide_index=True)
     else:
         st.info("No closed trades found for capital gains calculation.")

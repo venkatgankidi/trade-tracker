@@ -95,7 +95,19 @@ def portfolio_ui() -> None:
         st.subheader("📊 Portfolio Summary")
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
-            st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain", "total unrealized gains", "total p/l (closed)"]]
+            if highlight_cols:
+                def color_profit_loss(val):
+                    try:
+                        v = float(str(val).replace('%',''))
+                    except:
+                        return ""
+                    color = "green" if v > 0 else ("red" if v < 0 else "black")
+                    return f"color: {color}"
+                styled_df = summary_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(summary_df, use_container_width=True, hide_index=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -108,19 +120,20 @@ def portfolio_ui() -> None:
                 display_df = group_df.copy()
                 display_df = display_df.sort_values("ticker")
                 display_df = display_df.drop(columns=["platform"], errors='ignore')
-                # Format percent_profit_loss as a string with %
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
-                st.dataframe(display_df, use_container_width=True, hide_index=True)
-                # Line chart: Current Value, Trade Cost, and Unrealized Gain/Loss by Ticker
-                if 'ticker' in display_df.columns and 'current_value' in display_df.columns and 'unrealized_gain' in display_df.columns and 'trade_cost' in display_df.columns:
-                    melted = display_df.melt(id_vars=['ticker'], value_vars=['current_value', 'trade_cost', 'unrealized_gain'], var_name='Metric', value_name='Value')
-                    chart = alt.Chart(melted).mark_line(point=True).encode(
-                        x=alt.X('ticker:N', title='Ticker', axis=alt.Axis(labelAngle=-45)),
-                        y=alt.Y('Value:Q'),
-                        color=alt.Color('Metric:N', title='Metric'),
-                        tooltip=['ticker', 'Metric', 'Value']
-                    )
-                    st.altair_chart(chart, use_container_width=True)
+                highlight_cols = [col for col in display_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain"]]
+                if highlight_cols:
+                    def color_profit_loss(val):
+                        try:
+                            v = float(str(val).replace('%',''))
+                        except:
+                            return ""
+                        color = "green" if v > 0 else ("red" if v < 0 else "black")
+                        return f"color: {color}"
+                    styled_df = display_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                else:
+                    st.dataframe(display_df, use_container_width=True, hide_index=True)
         else:
             st.info("No portfolio holdings found.")

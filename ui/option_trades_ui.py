@@ -65,7 +65,16 @@ def option_trades_ui() -> None:
                 drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date","id"],
                 move_cols=["Platform", "open_fee"]
             )
-            st.dataframe(df_open, use_container_width=True, hide_index=True)
+            # Highlight profit/loss columns if present
+            highlight_cols = [col for col in df_open.columns if col in ["profit_loss", "gain", "percentage"]]
+            if highlight_cols:
+                def color_profit_loss(val):
+                    color = "green" if val > 0 else ("red" if val < 0 else "black")
+                    return f"color: {color}"
+                styled_df = df_open.style.applymap(color_profit_loss, subset=highlight_cols)
+                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            else:
+                st.dataframe(df_open, use_container_width=True, hide_index=True)
         else:
             st.info("No open option trades.")
         st.header("🔴 Closed Option Trades")
@@ -84,11 +93,13 @@ def option_trades_ui() -> None:
                 drop_cols=["id","status"],
                 move_cols=["open_fee","notes"]
             )
-            if "profit_loss" in df_closed.columns:
+            # Highlight profit/loss columns if present
+            highlight_cols = [col for col in df_closed.columns if col in ["profit_loss", "gain", "percentage"]]
+            if highlight_cols:
                 def color_profit_loss(val):
                     color = "green" if val > 0 else ("red" if val < 0 else "black")
                     return f"color: {color}"
-                styled_df = df_closed.style.applymap(color_profit_loss, subset=["profit_loss"])
+                styled_df = df_closed.style.applymap(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(df_closed, use_container_width=True, hide_index=True)
