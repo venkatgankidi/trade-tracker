@@ -12,7 +12,7 @@ def dashboard():
         st.subheader("📈 Positions Summary")
         pos_mgr_df = get_positions_summary()
         if not pos_mgr_df.empty:
-            highlight_cols = [col for col in pos_mgr_df.columns if col.lower() in ["profit_loss", "gain", "total p/l (closed)"]]
+            highlight_cols = [col for col in pos_mgr_df.columns if col.lower() in ["profit_loss", "gain", "total p/l (closed)", "pct_unrealized_gain"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:
@@ -33,7 +33,7 @@ def dashboard():
         st.subheader("💼 Portfolio Summary")
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
-            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "percent_profit_loss", "unrealized_gain", "total unrealized gains"]]
+            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "percent_profit_loss", "unrealized_gain", "total unrealized gains", "pct_unrealized_gain"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:
@@ -54,7 +54,7 @@ def dashboard():
         st.subheader("📝 Option Trades Summary")
         opt_df = get_option_trades_summary()
         if not opt_df.empty:
-            highlight_cols = [col for col in opt_df.columns if col.lower() in ["profit_loss", "gain", "total option p/l (closed)"]]
+            highlight_cols = [col for col in opt_df.columns if col.lower() in ["profit_loss", "gain", "total option p/l (closed)", "pct_unrealized_gain"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:
@@ -75,7 +75,7 @@ def dashboard():
         st.subheader("💵 Tax Summary by Year")
         summary_df = tax_summary()
         if not summary_df.empty:
-            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "total gain/loss", "gain/loss"]]
+            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "total gain/loss", "gain/loss", "pct_unrealized_gain"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:

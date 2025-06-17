@@ -95,7 +95,7 @@ def portfolio_ui() -> None:
         st.subheader("📊 Portfolio Summary")
         summary_df = get_position_summary_with_total()
         if not summary_df.empty:
-            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain", "total unrealized gains", "total p/l (closed)"]]
+            highlight_cols = [col for col in summary_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain", "total unrealized gains", "total p/l (closed)", "pct unrealized gain", "pct_unrealized_gain"]]
             if highlight_cols:
                 def color_profit_loss(val):
                     try:
@@ -122,7 +122,7 @@ def portfolio_ui() -> None:
                 display_df = display_df.drop(columns=["platform"], errors='ignore')
                 if "percent_profit_loss" in display_df.columns:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
-                highlight_cols = [col for col in display_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain"]]
+                highlight_cols = [col for col in display_df.columns if col.lower() in ["profit_loss", "gain", "percentage", "percent_profit_loss", "unrealized_gain", "pct unrealized gain", "pct_unrealized_gain"]]
                 if highlight_cols:
                     def color_profit_loss(val):
                         try:

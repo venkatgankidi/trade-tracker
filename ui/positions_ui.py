@@ -80,6 +80,7 @@ def positions_ui() -> None:
                     )
                     st.altair_chart(chart, use_container_width=True)
                     st.markdown("**Detailed Positions**")
+                    detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
                     st.dataframe(detail_df, use_container_width=True, hide_index=True)
         else:
             st.info("No open positions.")
