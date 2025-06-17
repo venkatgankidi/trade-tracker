@@ -138,13 +138,13 @@ def portfolio_ui() -> None:
                     st.dataframe(styled_df, use_container_width=True, hide_index=True)
                 else:
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
-                # Add bar chart for portfolio holdings by ticker (current value)
-                if 'ticker' in display_df.columns and 'current_value' in display_df.columns:
+                # Change portfolio holdings chart to plot profit/loss by ticker
+                if 'ticker' in display_df.columns and 'unrealized_gain' in display_df.columns:
                     chart = alt.Chart(display_df).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
-                        y=alt.Y('current_value:Q', title='Current Value'),
+                        y=alt.Y('unrealized_gain:Q', title='Unrealized Gain/Loss'),
                         color=alt.value('#4e79a7'),
-                        tooltip=['ticker', 'current_value']
+                        tooltip=['ticker', 'unrealized_gain']
                     )
                     st.altair_chart(chart, use_container_width=True)
         else:
