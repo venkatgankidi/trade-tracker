@@ -143,15 +143,5 @@ def taxes_ui() -> None:
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
-        # Change chart for taxes by term to line chart
-        merged = df.groupby(['Tax Year', 'Asset Type', 'Term'], as_index=False)['Gain/Loss'].sum()
-        chart = alt.Chart(merged).mark_line(point=True).encode(
-            x=alt.X('Tax Year:O', title='Tax Year'),
-            y=alt.Y('Gain/Loss:Q', title='Gain/Loss'),
-            color=alt.Color('Term:N', title='Term'),
-            strokeDash=alt.StrokeDash('Asset Type:N', title='Asset Type'),
-            tooltip=['Tax Year', 'Asset Type', 'Term', 'Gain/Loss']
-        )
-        st.altair_chart(chart, use_container_width=True)
     else:
         st.info("No closed trades found for capital gains calculation.")

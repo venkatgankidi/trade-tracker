@@ -99,15 +99,12 @@ def dashboard():
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
-            # Change tax summary chart per year to a line chart
-            chart = alt.Chart(summary_df).transform_fold(
-                ['Total Gain/Loss', 'Total Estimated Tax'],
-                as_=['Metric', 'Value']
-            ).mark_line(point=True).encode(
+            # Only track total gain/loss in tax summary chart per year
+            chart = alt.Chart(summary_df).mark_line(point=True).encode(
                 x=alt.X('Tax Year:O', title='Tax Year'),
-                y=alt.Y('Value:Q', title='Amount'),
-                color=alt.Color('Metric:N', title='Metric'),
-                tooltip=['Tax Year', alt.Tooltip('Metric:N', title='Metric'), alt.Tooltip('Value:Q', title='Value')]
+                y=alt.Y('Total Gain/Loss:Q', title='Total Gain/Loss'),
+                color=alt.value('#4e79a7'),
+                tooltip=['Tax Year', alt.Tooltip('Total Gain/Loss:Q', title='Total Gain/Loss')]
             )
             st.altair_chart(chart, use_container_width=True)
         else:

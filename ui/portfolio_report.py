@@ -138,13 +138,14 @@ def portfolio_ui() -> None:
                     st.dataframe(styled_df, use_container_width=True, hide_index=True)
                 else:
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
-                # Change portfolio holdings chart to plot profit/loss by ticker
-                if 'ticker' in display_df.columns and 'unrealized_gain' in display_df.columns:
-                    chart = alt.Chart(display_df).mark_bar().encode(
+                # Change portfolio holdings chart to plot total trade cost vs profit/loss per ticker
+                if 'ticker' in display_df.columns and 'trade_cost' in display_df.columns and 'unrealized_gain' in display_df.columns:
+                    melted = display_df.melt(id_vars=['ticker'], value_vars=['trade_cost', 'unrealized_gain'], var_name='Metric', value_name='Value')
+                    chart = alt.Chart(melted).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
-                        y=alt.Y('unrealized_gain:Q', title='Unrealized Gain/Loss'),
-                        color=alt.value('#4e79a7'),
-                        tooltip=['ticker', 'unrealized_gain']
+                        y=alt.Y('Value:Q', title='Amount'),
+                        color=alt.Color('Metric:N', title='Metric'),
+                        tooltip=['ticker', 'Metric', 'Value']
                     )
                     st.altair_chart(chart, use_container_width=True)
         else:
