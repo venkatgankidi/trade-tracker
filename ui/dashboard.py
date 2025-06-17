@@ -99,5 +99,16 @@ def dashboard():
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            # Add tax summary chart per year
+            chart = alt.Chart(summary_df).transform_fold(
+                ['Total Gain/Loss', 'Total Estimated Tax'],
+                as_=['Metric', 'Value']
+            ).mark_bar().encode(
+                x=alt.X('Tax Year:O', title='Tax Year'),
+                y=alt.Y('Value:Q', title='Amount'),
+                color=alt.Color('Metric:N', title='Metric'),
+                tooltip=['Tax Year', alt.Tooltip('Metric:N', title='Metric'), alt.Tooltip('Value:Q', title='Value')]
+            )
+            st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No closed trades found for tax summary.")

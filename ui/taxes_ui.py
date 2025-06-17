@@ -119,7 +119,7 @@ def taxes_ui() -> None:
                 x=alt.X('Tax Year:O', title='Tax Year'),
                 y=alt.Y('Value:Q', title='Amount'),
                 color=alt.Color('Metric:N', title='Metric'),
-                tooltip=['Tax Year', 'Metric', 'Value']
+                tooltip=['Tax Year', alt.Tooltip('Metric:N', title='Metric'), alt.Tooltip('Value:Q', title='Value')]
             )
             st.altair_chart(chart, use_container_width=True)
     else:

@@ -138,5 +138,14 @@ def portfolio_ui() -> None:
                     st.dataframe(styled_df, use_container_width=True, hide_index=True)
                 else:
                     st.dataframe(display_df, use_container_width=True, hide_index=True)
+                # Add bar chart for portfolio holdings by ticker (current value)
+                if 'ticker' in display_df.columns and 'current_value' in display_df.columns:
+                    chart = alt.Chart(display_df).mark_bar().encode(
+                        x=alt.X('ticker:N', title='Ticker'),
+                        y=alt.Y('current_value:Q', title='Current Value'),
+                        color=alt.value('#4e79a7'),
+                        tooltip=['ticker', 'current_value']
+                    )
+                    st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No portfolio holdings found.")
