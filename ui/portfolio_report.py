@@ -100,6 +100,17 @@ def portfolio_ui() -> None:
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
+            # Restore line chart: Portfolio Value and Unrealized Gains by Platform
+            if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns and 'Total Unrealized Gains' in summary_df.columns:
+                plot_df = summary_df[summary_df['Platform'] != 'Total'].copy()
+                melted = plot_df.melt(id_vars=['Platform'], value_vars=['Total Portfolio Value', 'Total Unrealized Gains'], var_name='Metric', value_name='Value')
+                chart = alt.Chart(melted).mark_line(point=True).encode(
+                    x=alt.X('Platform:N', title='Platform', axis=alt.Axis(labelAngle=-45)),
+                    y=alt.Y('Value:Q'),
+                    color=alt.Color('Metric:N', title='Metric'),
+                    tooltip=['Platform', 'Metric', 'Value']
+                )
+                st.altair_chart(chart, use_container_width=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")

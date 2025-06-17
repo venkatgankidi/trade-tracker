@@ -110,6 +110,18 @@ def taxes_ui() -> None:
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        # Add back bar chart for yearly gain/loss and estimated tax
+        if not summary_df.empty:
+            chart = alt.Chart(summary_df).transform_fold(
+                ['Total Gain/Loss', 'Total Estimated Tax'],
+                as_=['Metric', 'Value']
+            ).mark_bar().encode(
+                x=alt.X('Tax Year:O', title='Tax Year'),
+                y=alt.Y('Value:Q', title='Amount'),
+                color=alt.Color('Metric:N', title='Metric'),
+                tooltip=['Tax Year', 'Metric', 'Value']
+            )
+            st.altair_chart(chart, use_container_width=True)
     else:
         st.info("No closed trades found for tax summary.")
     st.write("---")
@@ -143,5 +155,14 @@ def taxes_ui() -> None:
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
+        # Add back stacked bar chart for gain/loss by asset type and year
+        merged = df.groupby(['Tax Year', 'Asset Type'], as_index=False)['Gain/Loss'].sum()
+        chart = alt.Chart(merged).mark_bar().encode(
+            x=alt.X('Tax Year:O', title='Tax Year'),
+            y=alt.Y('Gain/Loss:Q', stack='zero', title='Gain/Loss'),
+            color=alt.Color('Asset Type:N', title='Asset Type'),
+            tooltip=['Tax Year', 'Asset Type', 'Gain/Loss']
+        )
+        st.altair_chart(chart, use_container_width=True)
     else:
         st.info("No closed trades found for capital gains calculation.")

@@ -60,7 +60,7 @@ def positions_ui() -> None:
                     summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
                     st.markdown("**Summary by Ticker**")
                     st.dataframe(summary, use_container_width=True, hide_index=True)
-                    # Bar chart: Open Positions by Ticker
+                    # Restore bar chart: Open Positions by Ticker
                     chart = alt.Chart(summary).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
                         y=alt.Y('Total Quantity:Q', title='Quantity'),
@@ -107,7 +107,7 @@ def positions_ui() -> None:
                         st.dataframe(styled_df, use_container_width=True, hide_index=True)
                     else:
                         st.dataframe(summary_closed, use_container_width=True, hide_index=True)
-                    # Bar chart: Closed Positions Profit/Loss by Ticker
+                    # Restore bar chart: Closed Positions Profit/Loss by Ticker
                     chart = alt.Chart(summary_closed).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
                         y=alt.Y('Profit/Loss:Q', title='Total Profit/Loss'),
