@@ -130,7 +130,7 @@ def taxes_ui() -> None:
             })
         df = pd.DataFrame(rows)
         st.subheader("Summary by Tax Year, Asset, and Term")
-        highlight_cols = [col for col in df.columns if col.lower() in ["total estimated tax", "gain/loss"]]
+        highlight_cols = [col for col in df.columns if col.lower() in ["estimated tax", "gain/loss"]]
         if highlight_cols:
             def color_profit_loss(val):
                 try:
