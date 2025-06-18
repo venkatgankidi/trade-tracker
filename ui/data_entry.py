@@ -44,7 +44,7 @@ def data_entry() -> None:
                 st.write(f"**Open Price:** {trade['option_open_price']}")
                 col1, col2 = st.columns(2)
                 with col1:
-                    close_status = st.selectbox("Status", ["expired", "exercised", "close"], help="Final status of the option trade.")
+                    close_status = st.selectbox("Status", ["expired", "exercised", "closed"], help="Final status of the option trade.")
                     close_date = st.date_input("Close Date", value=datetime.date.today(), help="Date the option was closed.")
                 with col2:
                     option_close_price = st.number_input("Option Close Price", min_value=0.0, format="%.2f", help="Price at which the option was closed.")

@@ -110,6 +110,14 @@ def taxes_ui() -> None:
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                    # Only track total gain/loss in tax summary chart per year
+        chart = alt.Chart(summary_df).mark_line(point=True).encode(
+            x=alt.X('Tax Year:O', title='Tax Year'),
+            y=alt.Y('Total Gain/Loss:Q', title='Total Gain/Loss'),
+            color=alt.value('#4e79a7'),
+            tooltip=['Tax Year', alt.Tooltip('Total Gain/Loss:Q', title='Total Gain/Loss')]
+        )
+        st.altair_chart(chart, use_container_width=True)
     else:
         st.info("No closed trades found for tax summary.")
     st.write("---")
