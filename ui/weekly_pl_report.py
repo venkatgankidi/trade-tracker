@@ -50,17 +50,26 @@ def weekly_pl_report_ui():
     merged["Option P/L"] = [to_float(x) for x in merged["Option P/L"]]
     merged["Total P/L"] = merged["Stock P/L"] + merged["Option P/L"]
     merged = merged.sort_values(["Year", "Week"], ascending=[False, False])
+    # Add week range column (e.g., '2025-06-16 to 2025-06-22')
+    def week_range(year, week):
+        # ISO week: Monday is the first day of the week
+        d = datetime.date.fromisocalendar(int(year), int(week), 1)
+        week_start = d
+        week_end = d + datetime.timedelta(days=6)
+        return f"{week_start.strftime('%Y-%m-%d')} to {week_end.strftime('%Y-%m-%d')}"
+    merged["Week Range"] = [week_range(row["Year"], row["Week"]) for _, row in merged.iterrows()]
+    # Reorder columns for display
+    display_cols = ["Week Range", "Stock P/L", "Option P/L", "Total P/L"]
     st.subheader("Weekly P/L Table")
-    st.dataframe(merged, use_container_width=True, hide_index=True)
+    st.dataframe(merged[display_cols], use_container_width=True, hide_index=True)
 
     st.subheader("Trending Graph: Weekly P/L")
-    melted = merged.melt(id_vars=["Year", "Week"], value_vars=["Stock P/L", "Option P/L", "Total P/L"], var_name="Type", value_name="P/L")
-    melted["Year-Week"] = melted["Year"].astype(str) + "-W" + melted["Week"].astype(str)
+    melted = merged.melt(id_vars=["Week Range"], value_vars=["Stock P/L", "Option P/L", "Total P/L"], var_name="Type", value_name="P/L")
     chart = alt.Chart(melted).mark_line(point=True).encode(
-        x=alt.X('Year-Week:N', title='Year-Week', sort=None, axis=alt.Axis(labelAngle=-45)),
+        x=alt.X('Week Range:N', title='Week Range', sort=None, axis=alt.Axis(labelAngle=-45)),
         y=alt.Y('P/L:Q', title='Profit/Loss'),
         color=alt.Color('Type:N', title='Type'),
-        tooltip=['Year', 'Week', 'Type', 'P/L']
+        tooltip=['Week Range', 'Type', 'P/L']
     )
     st.altair_chart(chart, use_container_width=True)
 

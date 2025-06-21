@@ -91,7 +91,7 @@ def option_trades_ui() -> None:
                 df_closed,
                 platform_map,
                 drop_cols=["id","status"],
-                move_cols=["open_fee","Platform"]
+                move_cols=["Platform","open_fee","close_fee","close_date", "profit_loss"]
             )
             # Highlight profit/loss columns if present
             highlight_cols = [col for col in df_closed.columns if col in ["profit_loss", "gain", "percentage"]]
