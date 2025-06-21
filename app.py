@@ -7,6 +7,7 @@ from ui.portfolio_report import portfolio_ui
 from ui.data_entry import data_entry
 from ui.dashboard import dashboard
 from ui.taxes_ui import taxes_ui
+from ui.weekly_pl_report import weekly_pl_report_ui
 
 st.set_page_config(page_title="Portfolio Tracker", layout="wide")
 
@@ -15,6 +16,7 @@ NAVIGATION = {
     "Portfolio": "\U0001F4BC Portfolio",
     "Positions": "\U0001F4D2 Positions",
     "Option Trades": "\U0001F4D1 Option Trades",
+    "Weekly P/L": "📅 Weekly P/L",
     "Taxes": "\U0001F4B0 Taxes",
     "Data Entry": "\U0001F4DD Data Entry"
 }
@@ -74,6 +76,8 @@ def main():
             positions_ui()
         elif page == "Option Trades":
             option_trades_ui()
+        elif page == "Weekly P/L":
+            weekly_pl_report_ui()
         elif page == "Taxes":
             taxes_ui()
         elif page == "Data Entry":
