@@ -60,8 +60,8 @@ def get_monthly_pl_options():
     monthly = monthly.rename(columns={"profit_loss": "Option P/L"})
     return monthly
 
-def pl_trends_ui():
-    st.title("📊 P/L Trends: Weekly & Monthly")
+def weekly_monthly_pl_report_ui():
+    st.title("📊 Weekly & Monthly P/L Report")
     st.markdown("View your profit/loss trends by week and by month for both stocks and options.")
 
     # --- Weekly Table & Graph ---
@@ -74,7 +74,7 @@ def pl_trends_ui():
     merged_weekly["Option P/L"] = [float(x) for x in merged_weekly["Option P/L"]]
     merged_weekly["Total P/L"] = merged_weekly["Stock P/L"] + merged_weekly["Option P/L"]
     merged_weekly["Week Ending"] = [week_ending(row["Year"], row["Week"]) for _, row in merged_weekly.iterrows()]
-    display_cols_week = ["Year", "Week", "Week Ending", "Stock P/L", "Option P/L", "Total P/L"]
+    display_cols_week = ["Year", "Week Ending", "Stock P/L", "Option P/L", "Total P/L"]
     st.subheader("Weekly P/L Table")
     st.dataframe(merged_weekly[display_cols_week], use_container_width=True, hide_index=True)
 
@@ -111,5 +111,3 @@ def pl_trends_ui():
         column=alt.Column('Year:N', title='Year')
     )
     st.altair_chart(chart_month, use_container_width=True)
-
-    st.info("Green = profit, Red = loss. Data is based on closed trades only.")

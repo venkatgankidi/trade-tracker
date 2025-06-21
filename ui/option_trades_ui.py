@@ -91,8 +91,21 @@ def option_trades_ui() -> None:
                 df_closed,
                 platform_map,
                 drop_cols=["id","status"],
-                move_cols=["Platform","open_fee"]
+                move_cols=["open_fee","Platform"]
             )
+            # Reorder columns: close_fee, close_date before profit_loss and notes
+            col_order = list(df_closed.columns)
+            for col in ["close_fee", "close_date"]:
+                if col in col_order:
+                    col_order.remove(col)
+            insert_idx = col_order.index("profit_loss") if "profit_loss" in col_order else len(col_order)
+            col_order = col_order[:insert_idx] + ["close_fee", "close_date"] + col_order[insert_idx:]
+            # Move notes after profit_loss
+            if "notes" in col_order:
+                col_order.remove("notes")
+                profit_idx = col_order.index("profit_loss") if "profit_loss" in col_order else len(col_order)-1
+                col_order.insert(profit_idx+1, "notes")
+            df_closed = df_closed[[c for c in col_order if c in df_closed.columns]]
             # Highlight profit/loss columns if present
             highlight_cols = [col for col in df_closed.columns if col in ["profit_loss", "gain", "percentage"]]
             if highlight_cols:
