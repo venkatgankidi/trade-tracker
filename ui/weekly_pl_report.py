@@ -40,9 +40,14 @@ def weekly_pl_report_ui():
     option_weekly = get_weekly_pl_options()
     # Merge for combined table
     merged = pd.merge(stock_weekly, option_weekly, on=["Year", "Week"], how="outer").fillna(0)
-    # Convert all to float using pd.to_numeric and .astype(float) to handle Decimal and object types
-    merged["Stock P/L"] = pd.to_numeric(merged["Stock P/L"].values, errors="coerce").astype(float)
-    merged["Option P/L"] = pd.to_numeric(merged["Option P/L"].values, errors="coerce").astype(float)
+    # Convert all to float using a robust approach (list comprehension)
+    def to_float(x):
+        try:
+            return float(x)
+        except Exception:
+            return 0.0
+    merged["Stock P/L"] = [to_float(x) for x in merged["Stock P/L"]]
+    merged["Option P/L"] = [to_float(x) for x in merged["Option P/L"]]
     merged["Total P/L"] = merged["Stock P/L"] + merged["Option P/L"]
     merged = merged.sort_values(["Year", "Week"], ascending=[False, False])
     st.subheader("Weekly P/L Table")
