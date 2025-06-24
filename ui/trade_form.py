@@ -22,9 +22,14 @@ def trade_form() -> None:
         if key not in st.session_state:
             st.session_state[key] = value
 
+    platform_keys = list(PLATFORM_CACHE.keys())
+    if not platform_keys:
+        st.warning("No platforms available. Please configure platforms in the database.")
+        return
+
     with st.form("trade_form"):
         ticker: str = st.text_input("Ticker", value=st.session_state["ticker"], key="ticker")
-        platform: str = st.selectbox("Platform", list(PLATFORM_CACHE.keys()), index=list(PLATFORM_CACHE.keys()).index(st.session_state["platform"]) if st.session_state["platform"] in PLATFORM_CACHE else 0, key="platform")
+        platform: str = st.selectbox("Platform", platform_keys, index=platform_keys.index(st.session_state["platform"]) if st.session_state["platform"] in platform_keys else 0, key="platform")
         price: float = st.number_input("Price", min_value=0.0, format="%.2f", value=st.session_state["price"], key="price")
         quantity: float = st.number_input("Quantity", min_value=0.0, format="%.5f", value=st.session_state["quantity"], key="quantity")
         date = st.date_input("Date", value=st.session_state["date"] or None, key="date")
