@@ -106,7 +106,7 @@ def taxes_ui() -> None:
                     return ""
                 color = "green" if v > 0 else ("red" if v < 0 else "black")
                 return f"color: {color}"
-            styled_df = summary_df.style.applymap(color_profit_loss, subset=highlight_cols)
+            styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.dataframe(summary_df, use_container_width=True, hide_index=True)
@@ -147,7 +147,7 @@ def taxes_ui() -> None:
                     return ""
                 color = "green" if v > 0 else ("red" if v < 0 else "black")
                 return f"color: {color}"
-            styled_df = df.style.applymap(color_profit_loss, subset=highlight_cols)
+            styled_df = df.style.map(color_profit_loss, subset=highlight_cols)
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
         else:
             st.dataframe(df, use_container_width=True, hide_index=True)
