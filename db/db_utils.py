@@ -13,7 +13,7 @@ class PlatformCache:
         self.cache: Dict[str, int] = {}
 
     def keys(self):
-        return self.cache.keys()
+        return list(self.cache.keys())
 
     def get(self, key: str) -> Optional[int]:
         return self.cache.get(key)

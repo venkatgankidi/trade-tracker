@@ -1,12 +1,12 @@
 import streamlit as st
-from db.db_utils import PLATFORM_CACHE
+from db.db_utils import PLATFORM_CACHE, load_platforms
 from sqlalchemy import text
 from typing import Optional
 
 # Default values for the form fields
 defaults = {
     "ticker": "",
-    "platform": list(PLATFORM_CACHE.keys())[0] if PLATFORM_CACHE else "",
+    "platform": "",
     "price": 0.0,
     "quantity": 0.0,
     "date": None,
@@ -17,12 +17,14 @@ def trade_form() -> None:
     """
     Streamlit form for manual trade entry. Validates user input and inserts trade into the database.
     """
+    # Always load platforms before using PLATFORM_CACHE
+    load_platforms()
     # Initialize session state for form fields
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
 
-    platform_keys = list(PLATFORM_CACHE.keys())
+    platform_keys = PLATFORM_CACHE.keys()
     if not platform_keys:
         st.warning("No platforms available. Please configure platforms in the database.")
         return
