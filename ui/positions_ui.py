@@ -54,7 +54,7 @@ def positions_ui() -> None:
                         .apply(lambda g: pd.Series({
                             "Avg Entry Price": _weighted_avg(g, "entry_price", "quantity"),
                             "Total Quantity": g["quantity"].sum()
-                        }))
+                        }), include_groups=False)
                         .reset_index()
                     )
                     summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
@@ -89,7 +89,7 @@ def positions_ui() -> None:
                             "Quantity": g["quantity"].sum(),
                             "Avg Exit Price": _weighted_avg(g, "exit_price", "quantity"),
                             "Profit/Loss": g["profit_loss"].sum()
-                        }))
+                        }), include_groups=False)
                         .reset_index()
                     )
                     summary_closed = summary_closed[["ticker", "Avg Entry Price", "Quantity", "Avg Exit Price", "Profit/Loss"]]
@@ -103,7 +103,7 @@ def positions_ui() -> None:
                                 return ""
                             color = "green" if v > 0 else ("red" if v < 0 else "black")
                             return f"color: {color}"
-                        styled_df = summary_closed.style.applymap(color_profit_loss, subset=highlight_cols)
+                        styled_df = summary_closed.style.map(color_profit_loss, subset=highlight_cols)
                         st.dataframe(styled_df, use_container_width=True, hide_index=True)
                     else:
                         st.dataframe(summary_closed, use_container_width=True, hide_index=True)

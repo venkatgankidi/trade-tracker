@@ -71,7 +71,7 @@ def option_trades_ui() -> None:
                 def color_profit_loss(val):
                     color = "green" if val > 0 else ("red" if val < 0 else "black")
                     return f"color: {color}"
-                styled_df = df_open.style.applymap(color_profit_loss, subset=highlight_cols)
+                styled_df = df_open.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(df_open, use_container_width=True, hide_index=True)
@@ -112,7 +112,7 @@ def option_trades_ui() -> None:
                 def color_profit_loss(val):
                     color = "green" if val > 0 else ("red" if val < 0 else "black")
                     return f"color: {color}"
-                styled_df = df_closed.style.applymap(color_profit_loss, subset=highlight_cols)
+                styled_df = df_closed.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(df_closed, use_container_width=True, hide_index=True)

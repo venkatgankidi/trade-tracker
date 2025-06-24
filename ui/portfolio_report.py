@@ -31,7 +31,7 @@ def _get_portfolio_df() -> pd.DataFrame:
             "total_quantity": g["quantity"].sum(),
             "average_price": (g["entry_price"] * g["quantity"]).sum() / g["quantity"].sum() if g["quantity"].sum() else 0,
             "trade_cost": (g["entry_price"] * g["quantity"]).sum()
-        }))
+        }), include_groups=False)
         .reset_index()
     )
     unique_tickers = summary["ticker"].unique().tolist()
@@ -96,7 +96,7 @@ def portfolio_ui() -> None:
                         return ""
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
-                styled_df = summary_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
@@ -134,7 +134,7 @@ def portfolio_ui() -> None:
                             return ""
                         color = "green" if v > 0 else ("red" if v < 0 else "black")
                         return f"color: {color}"
-                    styled_df = display_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                    styled_df = display_df.style.map(color_profit_loss, subset=highlight_cols)
                     st.dataframe(styled_df, use_container_width=True, hide_index=True)
                 else:
                     st.dataframe(display_df, use_container_width=True, hide_index=True)

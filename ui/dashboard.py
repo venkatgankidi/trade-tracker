@@ -21,7 +21,7 @@ def dashboard():
                         return ""
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
-                styled_df = pos_mgr_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                styled_df = pos_mgr_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(pos_mgr_df, use_container_width=True, hide_index=True)
@@ -42,7 +42,7 @@ def dashboard():
                         return ""
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
-                styled_df = summary_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
@@ -63,7 +63,7 @@ def dashboard():
                         return ""
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
-                styled_df = opt_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                styled_df = opt_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(opt_df, use_container_width=True, hide_index=True)
@@ -84,7 +84,7 @@ def dashboard():
                         return ""
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
-                styled_df = summary_df.style.applymap(color_profit_loss, subset=highlight_cols)
+                styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
             else:
                 st.dataframe(summary_df, use_container_width=True, hide_index=True)
