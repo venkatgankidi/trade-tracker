@@ -30,11 +30,11 @@ def trade_form() -> None:
         return
 
     with st.form("trade_form"):
-        ticker: str = st.text_input("Ticker", value=st.session_state["ticker"], key="ticker")
+        ticker: str = st.text_input("Ticker", key="ticker")
         platform: str = st.selectbox("Platform", platform_keys, index=platform_keys.index(st.session_state["platform"]) if st.session_state["platform"] in platform_keys else 0, key="platform")
-        price: float = st.number_input("Price", min_value=0.0, format="%.2f", value=st.session_state["price"], key="price")
-        quantity: float = st.number_input("Quantity", min_value=0.0, format="%.5f", value=st.session_state["quantity"], key="quantity")
-        date = st.date_input("Date", value=st.session_state["date"] or None, key="date")
+        price: float = st.number_input("Price", min_value=0.0, format="%.2f", key="price")
+        quantity: float = st.number_input("Quantity", min_value=0.0, format="%.5f", key="quantity")
+        date = st.date_input("Date", key="date")
         trade_type: str = st.selectbox("Trade Type", ["Buy", "Sell"], index=["Buy", "Sell"].index(st.session_state["trade_type"]) if st.session_state["trade_type"] in ["Buy", "Sell"] else 0, key="trade_type")
         submit_button = st.form_submit_button("Submit Trade")
         error_msgs = []
