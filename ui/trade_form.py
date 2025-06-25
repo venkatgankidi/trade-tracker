@@ -67,9 +67,10 @@ def trade_form() -> None:
                     session.execute(sql, trade_data)
                     session.commit()
                 st.success("Trade added successfully!")
-                # Reset form values to defaults
-                for key, value in defaults.items():
-                    st.session_state[key] = value
+                # Reset form values to defaults by deleting keys
+                for key in defaults.keys():
+                    if key in st.session_state:
+                        del st.session_state[key]
                 st.rerun()
             except Exception as e:
                 st.error(f"Error adding trade: {e}")
