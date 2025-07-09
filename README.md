@@ -76,3 +76,4 @@ You can configure usernames and passwords directly in your code or via environme
 
 Most of the code in this repository was generated or written with the assistance of AI (GitHub Copilot, ChatGPT, or similar tools). Please review and test thoroughly before using in production.
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/venkatgankidi/trade-tracker?utm_source=oss&utm_medium=github&utm_campaign=venkatgankidi%2Ftrade-tracker&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
