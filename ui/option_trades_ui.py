@@ -141,7 +141,7 @@ def option_trades_data_entry():
             ticker = st.text_input("Ticker", help="Underlying symbol for the option.")
             platform = st.selectbox("Platform", list(PLATFORM_CACHE.keys()), help="Platform where the trade was executed.")
             strategy = st.selectbox("Option Strategy", [
-                "call", "put", "cash secured put", "covered call", "straddle", "strangle", "vertical spread", "other"
+                "call", "put", "cash secured put", "covered call"
             ], help="Type of option strategy.")
             strike_price = st.number_input("Strike Price", min_value=0.0, format="%.2f", help="Strike price of the option.")
             expiry_date = st.date_input("Expiry Date", help="Option expiry date.")

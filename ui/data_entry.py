@@ -61,14 +61,22 @@ def data_entry() -> None:
                             platform_id = trade['platform_id']
                             strike_price = trade['strike_price']
                             trade_date = close_date
+                            strategy = trade.get('strategy', '').lower()
+                            # Determine trade_type based on strategy 
+                            if "call" in strategy or "put" in strategy:
+                                trade_type = "Buy"
+                            elif "cash secured put" in strategy or "covered call" in strategy:
+                                trade_type = "Sell"
+                            else:
+                                trade_type = "Buy"  # Default fallback
                             insert_trade(
                                 ticker=ticker,
                                 platform_id=platform_id,
                                 price=strike_price,
                                 quantity=100.0,
                                 date=trade_date,
-                                trade_type="Buy"
+                                trade_type=trade_type
                             )
-                    st.toast(f"Option trade {trade_id} closed as {close_status}.", icon="✅")
+                        st.toast(f"Option trade {trade_id} closed as {close_status}.", icon="✅")
     else:
         st.info("No open option trades to close.")
