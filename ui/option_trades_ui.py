@@ -81,7 +81,8 @@ def option_trades_ui() -> None:
         closed_trades = (
             load_option_trades(status="expired") +
             load_option_trades(status="exercised") +
-            load_option_trades(status="closed")
+            load_option_trades(status="closed") +
+            load_option_trades(status="assigned")
         )
         if closed_trades:
             total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
