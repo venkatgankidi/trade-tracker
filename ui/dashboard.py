@@ -75,14 +75,29 @@ def dashboard():
         alloc_df = compute_asset_allocation()
         if not alloc_df.empty:
             st.subheader("📦 Asset Allocation by Platform")
-            # Display table pivoted for readability
+            # Display table with amounts and percentages
             pivot = alloc_df.pivot_table(index="Platform", columns="Asset Type", values="Amount", aggfunc="sum", fill_value=0.0).reset_index()
             # Ensure columns order
             for col in ["Stock", "ETF", "Options"]:
                 if col not in pivot.columns:
                     pivot[col] = 0.0
-            display_cols = ["Platform", "Stock", "ETF", "Options"]
-            st.dataframe(pivot[display_cols].round(2), use_container_width=True, hide_index=True)
+            
+            # Calculate row totals and percentages
+            pivot["Total"] = pivot[["Stock", "ETF", "Options"]].sum(axis=1)
+            for col in ["Stock", "ETF", "Options"]:
+                pivot[f"{col} %"] = (pivot[col] / pivot["Total"] * 100).round(2)
+            
+            # Organize columns for display
+            amount_cols = ["Platform", "Stock", "ETF", "Options", "Total"]
+            pct_cols = ["Platform", "Stock %", "ETF %", "Options %"]
+            
+            # Display amounts table
+            st.write("Asset Amounts by Platform ($)")
+            st.dataframe(pivot[amount_cols].round(2), use_container_width=True, hide_index=True)
+            
+            # Display percentages table
+            st.write("Asset Distribution Percentages (%)")
+            st.dataframe(pivot[pct_cols].round(2), use_container_width=True, hide_index=True)
             
             # Stacked bar chart
             melted = pivot.melt(id_vars=["Platform"], value_vars=["Stock", "ETF", "Options"], var_name="Asset Type", value_name="Amount")
@@ -124,8 +139,12 @@ def dashboard():
                     if not pie_df.empty:
                         with cols[idx % 3]:
                             pie_chart = alt.Chart(pie_df).mark_arc(innerRadius=50).encode(
-                                theta=alt.Theta(field="Amount", type="quantitative"),
-                                color=alt.Color(field="Asset Type", type="nominal"),
+                                theta=alt.Theta(field="Amount", type="quantitative", stack=True),
+                                color=alt.Color(
+                                    field="Asset Type",
+                                    type="nominal",
+                                    legend=alt.Legend(title="Asset Types", orient="right")
+                                ),
                                 tooltip=[
                                     alt.Tooltip("Asset Type:N"),
                                     alt.Tooltip("Amount:Q", format=",.2f"),
@@ -134,7 +153,11 @@ def dashboard():
                             ).properties(
                                 width=200,
                                 height=200,
-                                title=f"{platform} Distribution"
+                                title=alt.TitleParams(
+                                    text=f"{platform} Distribution",
+                                    anchor="middle",
+                                    fontSize=16
+                                )
                             )
                             
                             # Add percentage labels
