@@ -124,10 +124,7 @@ def dashboard():
                     pie_df = pd.DataFrame(pie_data)
                     if not pie_df.empty:
                         with cols[idx % 3]:
-                            # Create container for title
-                            st.markdown(f"### {platform}")
-                            
-                            # Create the base pie chart
+                            # Create the base pie chart with proper title configuration
                             pie_chart = alt.Chart(pie_df).mark_arc(innerRadius=50).encode(
                                 theta=alt.Theta(field="Amount", type="quantitative", stack=True),
                                 color=alt.Color(
@@ -148,8 +145,14 @@ def dashboard():
                                 ]
                             ).properties(
                                 width=300,
-                                height=280,  # Slightly reduced height to accommodate title
-                                padding={"top": 10, "bottom": 10, "left": 10, "right": 10}
+                                height=300,
+                                padding={"top": 30, "bottom": 30, "left": 20, "right": 20},
+                                title={
+                                    "text": platform,
+                                    "fontSize": 16,
+                                    "anchor": "middle",
+                                    "dy": -20
+                                }
                             )
                             
                             # Add percentage and amount labels with improved visibility
