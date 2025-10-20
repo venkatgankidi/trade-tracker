@@ -86,15 +86,65 @@ def dashboard():
             
             # Stacked bar chart
             melted = pivot.melt(id_vars=["Platform"], value_vars=["Stock", "ETF", "Options"], var_name="Asset Type", value_name="Amount")
-            chart = alt.Chart(melted).mark_bar().encode(
+            bar_chart = alt.Chart(melted).mark_bar().encode(
                 x=alt.X('Platform:N', title='Platform', axis=alt.Axis(labelAngle=-45)),
                 y=alt.Y('Amount:Q', title='Amount'),
                 color=alt.Color('Asset Type:N', title='Asset Type'),
                 tooltip=['Platform', 'Asset Type', alt.Tooltip('Amount:Q', title='Amount')]
             ).properties(
-                height=300
+                height=300,
+                title="Asset Allocation Across Platforms"
             )
-            st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(bar_chart, use_container_width=True)
+
+            # Pie charts per platform
+            st.subheader("📊 Asset Distribution by Platform")
+            
+            # Calculate percentages for each platform
+            platforms = pivot["Platform"].unique()
+            cols = st.columns(min(3, len(platforms)))  # Max 3 charts per row
+            
+            for idx, platform in enumerate(platforms):
+                platform_data = pivot[pivot["Platform"] == platform]
+                total = platform_data[["Stock", "ETF", "Options"]].sum(axis=1).iloc[0]
+                
+                if total > 0:  # Only show pie chart if there are assets
+                    pie_data = []
+                    for asset_type in ["Stock", "ETF", "Options"]:
+                        value = platform_data[asset_type].iloc[0]
+                        percentage = (value / total * 100) if total > 0 else 0
+                        if value != 0:  # Only include non-zero values
+                            pie_data.append({
+                                "Asset Type": asset_type,
+                                "Amount": value,
+                                "Percentage": percentage
+                            })
+                    
+                    pie_df = pd.DataFrame(pie_data)
+                    if not pie_df.empty:
+                        with cols[idx % 3]:
+                            pie_chart = alt.Chart(pie_df).mark_arc(innerRadius=50).encode(
+                                theta=alt.Theta(field="Amount", type="quantitative"),
+                                color=alt.Color(field="Asset Type", type="nominal"),
+                                tooltip=[
+                                    alt.Tooltip("Asset Type:N"),
+                                    alt.Tooltip("Amount:Q", format=",.2f"),
+                                    alt.Tooltip("Percentage:Q", format=".1f", title="Percentage (%)")
+                                ]
+                            ).properties(
+                                width=200,
+                                height=200,
+                                title=f"{platform} Distribution"
+                            )
+                            
+                            # Add percentage labels
+                            pie_labels = alt.Chart(pie_df).mark_text(radius=80, size=11).encode(
+                                theta=alt.Theta(field="Amount", type="quantitative", stack=True),
+                                text=alt.Text("Percentage:Q", format=".1f", title="Percentage (%)"),
+                                color=alt.value("white")
+                            )
+                            
+                            st.altair_chart(pie_chart + pie_labels)
         else:
             st.info("No portfolio or option data available to compute allocation.")
 

@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional, List
 # Set up logging
 logger = logging.getLogger(__name__)
 
-# --- PlatformCache and related functions (merged from db.py) ---
+# --- PlatformCache and related functions ---
 class PlatformCache:
     def __init__(self):
         self.cache: Dict[str, int] = {}
@@ -220,6 +220,7 @@ def sync_positions_from_trades():
     Optimized: Syncs the positions table with the trades table using batch inserts and minimal deletions.
     Handles partial sells by matching sells to open buy lots (FIFO).
     Only deletes positions for tickers/platforms being updated.
+    Rounds quantities to 6 decimal places to avoid floating point precision issues.
     """
     conn = get_st_connection()
     with conn.session as session:
@@ -236,7 +237,7 @@ def sync_positions_from_trades():
             ticker, platform_id, price, quantity, date, trade_type = row
             trades_by_key[(ticker, platform_id)].append({
                 'price': float(price),
-                'quantity': float(quantity),
+                'quantity': round(float(quantity), 6),  # Round to 6 decimal places
                 'date': date,
                 'trade_type': trade_type
             })
@@ -255,17 +256,17 @@ def sync_positions_from_trades():
                         'price': trade['price'],
                         'quantity': trade['quantity'],
                         'entry_date': trade['date'],
-                        'remaining': trade['quantity']
+                        'remaining': round(trade['quantity'], 6)  # Round to 6 decimal places
                     })
                 elif trade['trade_type'].lower() == 'sell':
-                    sell_qty = trade['quantity']
+                    sell_qty = round(trade['quantity'], 6)  # Round to 6 decimal places
                     sell_price = trade['price']
                     sell_date = trade['date']
-                    while sell_qty > 0 and open_lots:
+                    while round(sell_qty, 6) > 0 and open_lots:  # Round comparison to 6 decimal places
                         lot = open_lots[0]
-                        lot_qty = lot['remaining']
-                        matched_qty = min(lot_qty, sell_qty)
-                        profit_loss = (sell_price - lot['price']) * matched_qty
+                        lot_qty = round(lot['remaining'], 6)  # Round to 6 decimal places
+                        matched_qty = round(min(lot_qty, sell_qty), 6)  # Round to 6 decimal places
+                        profit_loss = round((sell_price - lot['price']) * matched_qty, 2)  # Round profit/loss to 2 decimal places
                         closed_positions.append({
                             'ticker': ticker,
                             'trade_type': None,
@@ -278,9 +279,9 @@ def sync_positions_from_trades():
                             'platform_id': platform_id,
                             'profit_loss': profit_loss
                         })
-                        lot['remaining'] -= matched_qty
-                        sell_qty -= matched_qty
-                        if lot['remaining'] == 0:
+                        lot['remaining'] = round(lot['remaining'] - matched_qty, 6)  # Round to 6 decimal places
+                        sell_qty = round(sell_qty - matched_qty, 6)  # Round to 6 decimal places
+                        if abs(lot['remaining']) < 1e-6:  # Compare with small epsilon instead of exact 0
                             open_lots.popleft()
             # After all trades, any open_lots are open positions
             for lot in open_lots:
