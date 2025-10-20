@@ -124,48 +124,27 @@ def dashboard():
                     pie_df = pd.DataFrame(pie_data)
                     if not pie_df.empty:
                         with cols[idx % 3]:
-                            # Add title before the chart
-                            st.write(f"#### {platform}")
-                            
                             # Create the base pie chart
                             pie_chart = alt.Chart(pie_df).mark_arc(innerRadius=50).encode(
-                                theta=alt.Theta(field="Amount", type="quantitative", stack=True),
-                                color=alt.Color(
-                                    field="Asset Type",
-                                    type="nominal",
-                                    legend=alt.Legend(
-                                        title="Asset Types",
-                                        orient="bottom",
-                                        labelFontSize=11,
-                                        titleFontSize=12,
-                                        columns=3
-                                    )
-                                ),
+                                theta=alt.Theta(field="Amount", type="quantitative"),
+                                color=alt.Color(field="Asset Type", type="nominal"),
                                 tooltip=[
                                     alt.Tooltip("Asset Type:N"),
                                     alt.Tooltip("Amount:Q", format="$,.2f"),
                                     alt.Tooltip("Percentage:Q", format=".1f", title="Percentage (%)")
                                 ]
                             ).properties(
-                                width=300,
-                                height=260,
-                                padding={"top": 10, "bottom": 30, "left": 20, "right": 20}
+                                title=f"{platform}"
                             )
                             
-                            # Add percentage and amount labels with improved visibility
-                            labels = alt.Chart(pie_df).mark_text(
-                                radius=90,
-                                size=11,
-                                fontWeight='bold',
-                                baseline='middle'
-                            ).encode(
+                            # Add percentage labels
+                            pie_labels = alt.Chart(pie_df).mark_text(radius=80, size=11).encode(
                                 theta=alt.Theta(field="Amount", type="quantitative", stack=True),
-                                text=alt.Text("Percentage:Q", format=".1f"),
+                                text=alt.Text("Percentage:Q", format=".1f", title="Percentage (%)"),
                                 color=alt.value("white")
                             )
                             
-                            # Create combined visualization
-                            st.altair_chart(pie_chart + labels, use_container_width=True)
+                            st.altair_chart(pie_chart + pie_labels)
         else:
             st.info("No portfolio or option data available to compute allocation.")
 
