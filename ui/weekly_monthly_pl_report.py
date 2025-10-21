@@ -86,7 +86,7 @@ def weekly_monthly_pl_report_ui():
         color=alt.Color('Type:N', title='Type'),
         tooltip=['Year', 'Week Ending', 'Type', 'P/L']
     )
-    st.altair_chart(chart_week, width="stretch")
+    st.altair_chart(chart_week)
 
     # --- Monthly Table & Graph ---
     stock_monthly = get_monthly_pl_stocks()
@@ -110,4 +110,4 @@ def weekly_monthly_pl_report_ui():
     ).facet(
         column=alt.Column('Year:N', title='Year')
     )
-    st.altair_chart(chart_month, width="stretch")
+    st.altair_chart(chart_month)

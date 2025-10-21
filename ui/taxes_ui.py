@@ -118,7 +118,7 @@ def taxes_ui() -> None:
             color=alt.value('#4e79a7'),
             tooltip=['Tax Year', alt.Tooltip('Total Gain/Loss:Q', title='Total Gain/Loss')]
         )
-        st.altair_chart(chart, width="stretch")
+        st.altair_chart(chart)
     else:
         st.info("No closed trades found for tax summary.")
     st.write("---")

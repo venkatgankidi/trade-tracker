@@ -110,7 +110,7 @@ def portfolio_ui() -> None:
                     color=alt.Color('Metric:N', title='Metric'),
                     tooltip=['Platform', 'Metric', 'Value']
                 )
-                st.altair_chart(chart, width="stretch")
+                st.altair_chart(chart)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -147,6 +147,6 @@ def portfolio_ui() -> None:
                         color=alt.Color('Metric:N', title='Metric'),
                         tooltip=['ticker', 'Metric', 'Value']
                     )
-                    st.altair_chart(chart, width="stretch")
+                    st.altair_chart(chart)
         else:
             st.info("No portfolio holdings found.")

@@ -126,7 +126,7 @@ def option_trades_ui() -> None:
                     y=alt.Y('profit_loss:Q', title='Total Profit/Loss'),
                     color=alt.value('#f28e2b')
                 )
-                st.altair_chart(chart, width="stretch")
+                st.altair_chart(chart)
         else:
             st.info("No closed option trades.")
 

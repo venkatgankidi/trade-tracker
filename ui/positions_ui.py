@@ -66,7 +66,7 @@ def positions_ui() -> None:
                         y=alt.Y('Total Quantity:Q', title='Quantity'),
                         color=alt.value('#59a14f')
                     )
-                    st.altair_chart(chart, width="stretch")
+                    st.altair_chart(chart)
                     st.markdown("**Detailed Positions**")
                     detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
                     st.dataframe(detail_df, width="stretch", hide_index=True)
@@ -113,7 +113,7 @@ def positions_ui() -> None:
                         y=alt.Y('Profit/Loss:Q', title='Total Profit/Loss'),
                         color=alt.value('#e15759')
                     )
-                    st.altair_chart(chart, width="stretch")
+                    st.altair_chart(chart)
                     st.markdown("**Detailed Closed Positions**")
                     detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
                     st.dataframe(detail_df, width="stretch", hide_index=True)
