@@ -93,11 +93,11 @@ def dashboard():
             
             # Display amounts table
             st.write("Asset Amounts by Platform ($)")
-            st.dataframe(pivot[amount_cols].round(2), use_width="stretch", hide_index=True)
+            st.dataframe(pivot[amount_cols].round(2), width="stretch", hide_index=True)
             
             # Display percentages table
             st.write("Asset Distribution Percentages (%)")
-            st.dataframe(pivot[pct_cols].round(2), use_width="stretch", hide_index=True)
+            st.dataframe(pivot[pct_cols].round(2), width="stretch", hide_index=True)
             
             st.write("") # Add some spacing
             
@@ -162,9 +162,9 @@ def dashboard():
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
                 styled_df = pos_mgr_df.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, use_width="stretch", hide_index=True)
+                st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
-                st.dataframe(pos_mgr_df, use_width="stretch", hide_index=True)
+                st.dataframe(pos_mgr_df, width="stretch", hide_index=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -183,9 +183,9 @@ def dashboard():
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
                 styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, use_width="stretch", hide_index=True)
+                st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
-                st.dataframe(summary_df, use_width="stretch", hide_index=True)
+                st.dataframe(summary_df, width="stretch", hide_index=True)
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -204,9 +204,9 @@ def dashboard():
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
                 styled_df = opt_df.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, use_width="stretch", hide_index=True)
+                st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
-                st.dataframe(opt_df, use_width="stretch", hide_index=True)
+                st.dataframe(opt_df, width="stretch", hide_index=True)
         else:
             st.info("No option trades found for summary.")
     st.markdown("---")
@@ -225,8 +225,8 @@ def dashboard():
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
                 styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, use_width="stretch", hide_index=True)
+                st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
-                st.dataframe(summary_df, use_width="stretch", hide_index=True)
+                st.dataframe(summary_df, width="stretch", hide_index=True)
         else:
             st.info("No closed trades found for tax summary.")

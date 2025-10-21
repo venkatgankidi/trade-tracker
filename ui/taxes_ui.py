@@ -107,9 +107,9 @@ def taxes_ui() -> None:
                 color = "green" if v > 0 else ("red" if v < 0 else "black")
                 return f"color: {color}"
             styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
-            st.dataframe(styled_df, use_width="stretch", hide_index=True)
+            st.dataframe(styled_df, width="stretch", hide_index=True)
         else:
-            st.dataframe(summary_df, use_width="stretch", hide_index=True)
+            st.dataframe(summary_df, width="stretch", hide_index=True)
 
         # Only track total gain/loss in tax summary chart per year
         chart = alt.Chart(summary_df).mark_line(point=True).encode(
@@ -118,7 +118,7 @@ def taxes_ui() -> None:
             color=alt.value('#4e79a7'),
             tooltip=['Tax Year', alt.Tooltip('Total Gain/Loss:Q', title='Total Gain/Loss')]
         )
-        st.altair_chart(chart, use_width="stretch")
+        st.altair_chart(chart, width="stretch")
     else:
         st.info("No closed trades found for tax summary.")
     st.write("---")
@@ -149,8 +149,8 @@ def taxes_ui() -> None:
                 color = "green" if v > 0 else ("red" if v < 0 else "black")
                 return f"color: {color}"
             styled_df = df.style.map(color_profit_loss, subset=highlight_cols)
-            st.dataframe(styled_df, use_width="stretch", hide_index=True)
+            st.dataframe(styled_df, width="stretch", hide_index=True)
         else:
-            st.dataframe(df, use_width="stretch", hide_index=True)
+            st.dataframe(df, width="stretch", hide_index=True)
     else:
         st.info("No closed trades found for capital gains calculation.")

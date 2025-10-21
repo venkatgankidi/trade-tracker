@@ -59,17 +59,17 @@ def positions_ui() -> None:
                     )
                     summary = summary[["ticker", "Avg Entry Price", "Total Quantity"]]
                     st.markdown("**Summary by Ticker**")
-                    st.dataframe(summary, use_width="stretch", hide_index=True)
+                    st.dataframe(summary, width="stretch", hide_index=True)
                     # Restore bar chart: Open Positions by Ticker
                     chart = alt.Chart(summary).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
                         y=alt.Y('Total Quantity:Q', title='Quantity'),
                         color=alt.value('#59a14f')
                     )
-                    st.altair_chart(chart, use_width="stretch")
+                    st.altair_chart(chart, width="stretch")
                     st.markdown("**Detailed Positions**")
                     detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
-                    st.dataframe(detail_df, use_width="stretch", hide_index=True)
+                    st.dataframe(detail_df, width="stretch", hide_index=True)
         else:
             st.info("No open positions.")
         st.subheader("🔴 Closed Positions")
@@ -104,19 +104,19 @@ def positions_ui() -> None:
                             color = "green" if v > 0 else ("red" if v < 0 else "black")
                             return f"color: {color}"
                         styled_df = summary_closed.style.map(color_profit_loss, subset=highlight_cols)
-                        st.dataframe(styled_df, use_width="stretch", hide_index=True)
+                        st.dataframe(styled_df, width="stretch", hide_index=True)
                     else:
-                        st.dataframe(summary_closed, use_width="stretch", hide_index=True)
+                        st.dataframe(summary_closed, width="stretch", hide_index=True)
                     # Restore bar chart: Closed Positions Profit/Loss by Ticker
                     chart = alt.Chart(summary_closed).mark_bar().encode(
                         x=alt.X('ticker:N', title='Ticker'),
                         y=alt.Y('Profit/Loss:Q', title='Total Profit/Loss'),
                         color=alt.value('#e15759')
                     )
-                    st.altair_chart(chart, use_width="stretch")
+                    st.altair_chart(chart, width="stretch")
                     st.markdown("**Detailed Closed Positions**")
                     detail_df = _drop_and_sort_columns(platform_df.copy(), ["trade_type", "position_status", "platform_id", "id"], sort_col="entry_date")
-                    st.dataframe(detail_df, use_width="stretch", hide_index=True)
+                    st.dataframe(detail_df, width="stretch", hide_index=True)
         else:
             st.info("No closed positions.")
 
