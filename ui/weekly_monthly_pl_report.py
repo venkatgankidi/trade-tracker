@@ -76,7 +76,7 @@ def weekly_monthly_pl_report_ui():
     merged_weekly["Week Ending"] = [week_ending(row["Year"], row["Week"]) for _, row in merged_weekly.iterrows()]
     display_cols_week = ["Year", "Week Ending", "Stock P/L", "Option P/L", "Total P/L"]
     st.subheader("Weekly P/L Table")
-    st.dataframe(merged_weekly[display_cols_week], use_container_width=True, hide_index=True)
+    st.dataframe(merged_weekly[display_cols_week], use_width="stretch", hide_index=True)
 
     st.subheader("Weekly P/L Trend")
     melted_week = merged_weekly.melt(id_vars=["Year", "Week Ending"], value_vars=["Stock P/L", "Option P/L", "Total P/L"], var_name="Type", value_name="P/L")
@@ -86,7 +86,7 @@ def weekly_monthly_pl_report_ui():
         color=alt.Color('Type:N', title='Type'),
         tooltip=['Year', 'Week Ending', 'Type', 'P/L']
     )
-    st.altair_chart(chart_week, use_container_width=True)
+    st.altair_chart(chart_week, use_width="stretch")
 
     # --- Monthly Table & Graph ---
     stock_monthly = get_monthly_pl_stocks()
@@ -98,7 +98,7 @@ def weekly_monthly_pl_report_ui():
     merged_monthly["Month Name"] = merged_monthly["Month"].apply(lambda m: datetime.date(1900, int(m), 1).strftime('%b'))
     display_cols_month = ["Year", "Month Name", "Stock P/L", "Option P/L", "Total P/L"]
     st.subheader("Monthly P/L Table")
-    st.dataframe(merged_monthly[display_cols_month], use_container_width=True, hide_index=True)
+    st.dataframe(merged_monthly[display_cols_month], use_width="stretch", hide_index=True)
 
     st.subheader("Monthly P/L Trend")
     melted_month = merged_monthly.melt(id_vars=["Year", "Month Name"], value_vars=["Stock P/L", "Option P/L", "Total P/L"], var_name="Type", value_name="P/L")
@@ -110,4 +110,4 @@ def weekly_monthly_pl_report_ui():
     ).facet(
         column=alt.Column('Year:N', title='Year')
     )
-    st.altair_chart(chart_month, use_container_width=True)
+    st.altair_chart(chart_month, use_width="stretch")

@@ -97,9 +97,9 @@ def portfolio_ui() -> None:
                     color = "green" if v > 0 else ("red" if v < 0 else "black")
                     return f"color: {color}"
                 styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                st.dataframe(styled_df, use_width="stretch", hide_index=True)
             else:
-                st.dataframe(summary_df, use_container_width=True, hide_index=True)
+                st.dataframe(summary_df, use_width="stretch", hide_index=True)
             # Restore line chart: Portfolio Value and Unrealized Gains by Platform
             if 'Platform' in summary_df.columns and 'Total Portfolio Value' in summary_df.columns and 'Total Unrealized Gains' in summary_df.columns:
                 plot_df = summary_df[summary_df['Platform'] != 'Total'].copy()
@@ -110,7 +110,7 @@ def portfolio_ui() -> None:
                     color=alt.Color('Metric:N', title='Metric'),
                     tooltip=['Platform', 'Metric', 'Value']
                 )
-                st.altair_chart(chart, use_container_width=True)
+                st.altair_chart(chart, use_width="stretch")
         else:
             st.info("No positions found for summary.")
     st.markdown("---")
@@ -135,9 +135,9 @@ def portfolio_ui() -> None:
                         color = "green" if v > 0 else ("red" if v < 0 else "black")
                         return f"color: {color}"
                     styled_df = display_df.style.map(color_profit_loss, subset=highlight_cols)
-                    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                    st.dataframe(styled_df, use_width="stretch", hide_index=True)
                 else:
-                    st.dataframe(display_df, use_container_width=True, hide_index=True)
+                    st.dataframe(display_df, use_width="stretch", hide_index=True)
                 # Change portfolio holdings chart to plot trade cost, current value, and profit/loss per ticker in a line graph
                 if 'ticker' in display_df.columns and 'trade_cost' in display_df.columns and 'current_value' in display_df.columns and 'unrealized_gain' in display_df.columns:
                     melted = display_df.melt(id_vars=['ticker'], value_vars=['trade_cost', 'current_value', 'unrealized_gain'], var_name='Metric', value_name='Value')
@@ -147,6 +147,6 @@ def portfolio_ui() -> None:
                         color=alt.Color('Metric:N', title='Metric'),
                         tooltip=['ticker', 'Metric', 'Value']
                     )
-                    st.altair_chart(chart, use_container_width=True)
+                    st.altair_chart(chart, use_width="stretch")
         else:
             st.info("No portfolio holdings found.")

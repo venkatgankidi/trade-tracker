@@ -73,9 +73,9 @@ def option_trades_ui() -> None:
                     color = "green" if val > 0 else ("red" if val < 0 else "black")
                     return f"color: {color}"
                 styled_df = df_open.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                st.dataframe(styled_df, use_width="stretch", hide_index=True)
             else:
-                st.dataframe(df_open, use_container_width=True, hide_index=True)
+                st.dataframe(df_open, use_width="stretch", hide_index=True)
         else:
             st.info("No open option trades.")
         st.header("🔴 Closed Option Trades")
@@ -113,9 +113,9 @@ def option_trades_ui() -> None:
                     color = "green" if val > 0 else ("red" if val < 0 else "black")
                     return f"color: {color}"
                 styled_df = df_closed.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                st.dataframe(styled_df, use_width="stretch", hide_index=True)
             else:
-                st.dataframe(df_closed, use_container_width=True, hide_index=True)
+                st.dataframe(df_closed, use_width="stretch", hide_index=True)
             # Bar chart: Closed Option Trades P/L by Ticker (fix calculation)
             if 'ticker' in df_closed.columns and 'profit_loss' in df_closed.columns:
                 # Ensure profit_loss is float and not multiplied
@@ -126,7 +126,7 @@ def option_trades_ui() -> None:
                     y=alt.Y('profit_loss:Q', title='Total Profit/Loss'),
                     color=alt.value('#f28e2b')
                 )
-                st.altair_chart(chart, use_container_width=True)
+                st.altair_chart(chart, use_width="stretch")
         else:
             st.info("No closed option trades.")
 
