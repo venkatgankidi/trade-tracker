@@ -3,6 +3,7 @@ from ui.trade_form import trade_form
 from ui.csv_upload import upload_csv
 from ui.option_trades_ui import option_trades_data_entry
 from db.db_utils import load_option_trades, close_option_trade, PLATFORM_CACHE
+from db.db_utils import get_last_upload_time
 import datetime
 from typing import Optional, Dict, Any
 
@@ -15,6 +16,19 @@ def data_entry() -> None:
     trade_form()
     st.markdown("---")
     st.header("📄 CSV Upload")
+    # Show last CSV upload time (if any)
+    last_upload_iso = get_last_upload_time()
+    if last_upload_iso:
+        try:
+            # parse ISO UTC and display in local timezone
+            dt = datetime.datetime.fromisoformat(last_upload_iso)
+            # if naive assume UTC
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=datetime.timezone.utc).astimezone()
+            local_str = dt.strftime("%Y-%m-%d %H:%M:%S %Z")
+        except Exception:
+            local_str = last_upload_iso
+        st.caption(f"Last CSV upload: {local_str}")
     upload_csv()
     st.markdown("---")
     st.header("📑 Option Trades Data Entry")

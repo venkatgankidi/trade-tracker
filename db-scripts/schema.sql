@@ -46,3 +46,9 @@ CREATE TABLE IF NOT EXISTS option_trades (
     notes TEXT
 );
 
+-- Application metadata table for small key/value settings (e.g. last CSV upload time)
+CREATE TABLE IF NOT EXISTS app_metadata (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+

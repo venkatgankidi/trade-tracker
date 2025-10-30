@@ -2,7 +2,7 @@ import streamlit as st
 import csv
 import json
 import tempfile
-from db.db_utils import PLATFORM_CACHE
+from db.db_utils import PLATFORM_CACHE, set_last_upload_time
 from sqlalchemy import text
 from typing import Optional, List, Dict, Any
 
@@ -47,6 +47,12 @@ def upload_csv() -> None:
                         session.execute(sql, row)
                         session.commit()
                 st.success("Trades uploaded successfully!")
+                # Record the upload time (UTC)
+                try:
+                    set_last_upload_time()
+                except Exception:
+                    # non-fatal: don't block user on metadata write
+                    pass
                 st.rerun()
             except Exception as e:
                 st.error(f"Error uploading trades: {e}")

@@ -365,3 +365,45 @@ def insert_trade(
         )
         session.commit()
     st.cache_data.clear()
+
+
+# --- Last upload metadata helpers (DB-backed) -----------------------------
+def set_last_upload_time(ts: Optional[str] = None) -> None:
+    """Persist the last upload timestamp (UTC ISO string) into the DB.
+
+    If ts is None the current UTC time is used. This function assumes the
+    `app_metadata` table is present (managed via migrations/schema.sql). If the
+    table is missing this will raise an error from the DB which is intentional
+    for environments that require explicit migrations.
+    """
+    if ts is None:
+        ts = datetime.datetime.utcnow().isoformat()
+    try:
+        conn = get_st_connection()
+        with conn.session as session:
+            # upsert the key/value. Requires `app_metadata` to exist.
+            session.execute(
+                text("""
+                INSERT INTO app_metadata (key, value) VALUES (:key, :value)
+                ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value
+                """),
+                {"key": "last_csv_upload", "value": ts}
+            )
+            session.commit()
+    except Exception as e:
+        logger.error(f"Failed to write last upload metadata to DB: {e}")
+
+def get_last_upload_time() -> Optional[str]:
+    """Return the last upload UTC ISO timestamp as a string from the DB, or None if not set.
+
+    This function assumes the `app_metadata` table exists.
+    """
+    try:
+        conn = get_st_connection()
+        with conn.session as session:
+            result = session.execute(text("SELECT value FROM app_metadata WHERE key = :key"), {"key": "last_csv_upload"})
+            row = result.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        logger.error(f"Failed to read last upload metadata from DB: {e}")
+        return None
