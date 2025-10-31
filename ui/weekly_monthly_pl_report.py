@@ -69,7 +69,8 @@ def weekly_monthly_pl_report_ui():
     option_weekly = get_weekly_pl_options()
     merged_weekly = pd.merge(stock_weekly, option_weekly, on=["Year", "Week"], how="outer").fillna(0)
     def week_ending(year, week):
-        return datetime.date.fromisocalendar(int(year), int(week), 7)
+        # Use ISO weekday 5 (Friday) as the trading week end instead of Sunday (7)
+        return datetime.date.fromisocalendar(int(year), int(week), 5)
     merged_weekly["Stock P/L"] = [float(x) for x in merged_weekly["Stock P/L"]]
     merged_weekly["Option P/L"] = [float(x) for x in merged_weekly["Option P/L"]]
     merged_weekly["Total P/L"] = merged_weekly["Stock P/L"] + merged_weekly["Option P/L"]
