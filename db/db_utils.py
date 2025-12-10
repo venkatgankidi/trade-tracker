@@ -240,11 +240,21 @@ def sync_positions_from_trades():
         for row in trades:
             # row layout: id, ticker, platform_id, price, quantity, date, trade_type
             _id, ticker, platform_id, price, quantity, date, trade_type = row
+            # Normalize values: ensure numeric types, normalized trade_type and skip zero qty
+            try:
+                qty = round(float(quantity), 6)
+            except Exception:
+                qty = 0.0
+            if qty == 0:
+                # skip no-op trades
+                continue
+            ttype = (str(trade_type) if trade_type is not None else "").strip().lower()
             trades_by_key[(ticker, platform_id)].append({
-                'price': float(price),
-                'quantity': round(float(quantity), 6),  # Round to 6 decimal places
+                'id': _id,
+                'price': float(price) if price is not None else 0.0,
+                'quantity': qty,
                 'date': date,
-                'trade_type': trade_type
+                'trade_type': ttype
             })
         # Prepare batch inserts and minimal deletions
         all_keys = list(trades_by_key.keys())
