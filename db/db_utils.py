@@ -225,8 +225,12 @@ def sync_positions_from_trades():
     conn = get_st_connection()
     with conn.session as session:
         # Get all trades ordered by ticker, platform, date
+        # Select id as well and order by date first, then id as a tiebreaker to
+        # correctly handle multiple trades on the same date (day trades). This
+        # ensures chronological ordering where date is primary and id preserves
+        # insertion order for same-day events.
         result = session.execute(text('''
-            SELECT ticker, platform_id, price, quantity, date, trade_type
+            SELECT id, ticker, platform_id, price, quantity, date, trade_type
             FROM trades
             ORDER BY ticker, platform_id, date, id
         '''))
@@ -234,7 +238,8 @@ def sync_positions_from_trades():
         from collections import defaultdict, deque
         trades_by_key = defaultdict(list)
         for row in trades:
-            ticker, platform_id, price, quantity, date, trade_type = row
+            # row layout: id, ticker, platform_id, price, quantity, date, trade_type
+            _id, ticker, platform_id, price, quantity, date, trade_type = row
             trades_by_key[(ticker, platform_id)].append({
                 'price': float(price),
                 'quantity': round(float(quantity), 6),  # Round to 6 decimal places
