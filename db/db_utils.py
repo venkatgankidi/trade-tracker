@@ -422,3 +422,58 @@ def get_last_upload_time() -> Optional[str]:
     except Exception as e:
         logger.error(f"Failed to read last upload metadata from DB: {e}")
         return None
+
+# --- Cash flows management ---
+def insert_cash_flow(
+    platform_id: int,
+    flow_type: str,
+    amount: float,
+    flow_date: Any,
+    notes: Optional[str] = None
+) -> None:
+    """Insert a new cash deposit or withdrawal into the database."""
+    conn = get_st_connection()
+    with conn.session as session:
+        session.execute(
+            text("""
+            INSERT INTO cash_flows (platform_id, flow_type, amount, flow_date, notes)
+            VALUES (:platform_id, :flow_type, :amount, :flow_date, :notes)
+            """),
+            {
+                "platform_id": platform_id,
+                "flow_type": flow_type,
+                "amount": amount,
+                "flow_date": flow_date,
+                "notes": notes,
+            }
+        )
+        session.commit()
+    st.cache_data.clear()
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_cash_flows() -> List[Dict[str, Any]]:
+    """Load all cash flows from the database."""
+    conn = get_st_connection()
+    with conn.session as session:
+        result = session.execute(
+            text("SELECT id, platform_id, flow_type, amount, flow_date, notes FROM cash_flows ORDER BY flow_date DESC")
+        )
+        rows = result.fetchall()
+        columns = ["id", "platform_id", "flow_type", "amount", "flow_date", "notes"]
+        return [dict(zip(columns, row)) for row in rows]
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_total_cash_by_platform() -> Dict[str, float]:
+    """Get total cash (deposits - withdrawals) by platform."""
+    conn = get_st_connection()
+    with conn.session as session:
+        result = session.execute(text("""
+            SELECT p.name, COALESCE(SUM(CASE WHEN cf.flow_type = 'deposit' THEN cf.amount ELSE -cf.amount END), 0) as total_cash
+            FROM platforms p
+            LEFT JOIN cash_flows cf ON p.id = cf.platform_id
+            GROUP BY p.id, p.name
+            ORDER BY p.name
+        """))
+        rows = result.fetchall()
+        return {row[0]: float(row[1]) for row in rows}
+

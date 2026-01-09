@@ -2,6 +2,7 @@ import streamlit as st
 from ui.trade_form import trade_form
 from ui.csv_upload import upload_csv
 from ui.option_trades_ui import option_trades_data_entry
+from ui.cash_flows_ui import cash_flows_data_entry
 from db.db_utils import load_option_trades, close_option_trade, PLATFORM_CACHE
 from db.db_utils import get_last_upload_time
 import datetime
@@ -9,7 +10,7 @@ from typing import Optional, Dict, Any
 
 def data_entry() -> None:
     """
-    Streamlit UI for all data entry: manual trade, CSV upload, option trades, and closing option trades.
+    Streamlit UI for all data entry: manual trade, CSV upload, option trades, closing option trades, and cash flows.
     """
     st.title("📝 Data Entry")
     st.header("🛒 Manual Trade Entry")
@@ -94,3 +95,7 @@ def data_entry() -> None:
                         st.toast(f"Option trade {trade_id} closed as {close_status}.", icon="✅")
     else:
         st.info("No open option trades to close.")
+    st.markdown("---")
+    st.header("💰 Cash Deposits & Withdrawals")
+    cash_flows_data_entry()
+
