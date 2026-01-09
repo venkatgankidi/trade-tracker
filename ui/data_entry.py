@@ -47,7 +47,8 @@ def data_entry() -> None:
             "Select Option Trade to Close",
             trade_options,
             format_func=lambda x: x[0] if isinstance(x, tuple) else x,
-            help="Choose the option trade you want to close."
+            help="Choose the option trade you want to close.",
+            key="close_option_trade_select"
         )
         trade_id = selected[1] if isinstance(selected, tuple) else None
         trade = next((t for t in open_trades if t["id"] == trade_id), None)

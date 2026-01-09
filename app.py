@@ -65,76 +65,8 @@ def main():
     page = st.sidebar.radio(
         "Go to",
         list(NAVIGATION.keys()),
-        format_func=lambda x: NAVIGATION[x]
-    )
-
-    # Show spinner while loading new page content
-    with st.spinner("Loading page..."):
-        if page == "Dashboard":
-            dashboard()
-        elif page == "Portfolio":
-            portfolio_ui()
-        elif page == "Positions":
-            positions_ui()
-        elif page == "Option Trades":
-            option_trades_ui()
-        elif page == "Weekly & Monthly P/L Report":
-            weekly_monthly_pl_report_ui()
-        elif page == "Cash Flows":
-            cash_flows_ui()
-        elif page == "Taxes":
-            taxes_ui()
-        elif page == "Data Entry":
-            data_entry()
-
-if __name__ == "__main__":
-    main()
-
-
-
-# Add config for authentication toggle
-def is_auth_enabled():
-    # Use st.secrets for config, fallback to True if not set
-    return str(st.secrets.get("auth_enabled", "true")).lower() == "true"
-
-USERNAME = st.secrets.get("auth_username")
-PASSWORD = st.secrets.get("auth_password")
-
-if is_auth_enabled():
-    if not USERNAME or not PASSWORD:
-        st.error("Authentication credentials are not set. Please configure them in the Streamlit secrets.toml file.")
-        st.stop()
-
-def main():
-    if is_auth_enabled():
-        if "authenticated" not in st.session_state:
-            st.session_state["authenticated"] = False
-
-        if not st.session_state["authenticated"]:
-            st.title("Login")
-            username = st.text_input("Username")
-            password = st.text_input("Password", type="password")
-            if st.button("Login"):
-                if username == USERNAME and password == PASSWORD:
-                    st.session_state["authenticated"] = True
-                    st.success("Login successful")
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password")
-            return
-
-        with st.sidebar:
-            st.markdown(f"**User:** {USERNAME}")
-            if st.button("Logout"):
-                st.session_state["authenticated"] = False
-                st.rerun()
-
-    load_platforms()
-    st.sidebar.title("Navigation")
-    page = st.sidebar.radio(
-        "Go to",
-        list(NAVIGATION.keys()),
-        format_func=lambda x: NAVIGATION[x]
+        format_func=lambda x: NAVIGATION[x],
+        key="nav_radio"
     )
 
     # Show spinner while loading new page content
