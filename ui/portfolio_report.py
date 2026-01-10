@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from db.db_utils import PLATFORM_CACHE, load_positions
+from db.db_utils import PLATFORM_CACHE, load_positions, load_option_trades
 from typing import Optional, List, Dict
 import altair as alt
 
@@ -43,15 +43,39 @@ def _get_portfolio_df() -> pd.DataFrame:
     return summary
 
 def get_position_summary() -> pd.DataFrame:
-    """Returns a summary DataFrame for each platform (investment, value, unrealized gain)."""
+    """Returns a summary DataFrame for each platform (investment, value, unrealized gain).
+    Total Investment = equities (trade_cost) + options exposure (excluding cash)."""
     portfolio_df = _get_portfolio_df()
     rows = []
     for platform in PLATFORM_CACHE.keys():
-        group = portfolio_df[portfolio_df["platform"] == platform]
-        if not group.empty:
-            total_investment = group["trade_cost"].sum()
-            total_portfolio_value = group["current_value"].sum()
-            total_unrealized_gain = group["unrealized_gain"].sum()
+        # Get equity investment from stocks and ETFs
+        equity_group = portfolio_df[portfolio_df["platform"] == platform]
+        equity_investment = equity_group["trade_cost"].sum() if not equity_group.empty else 0.0
+        
+        # Get options exposure for this platform
+        open_opts = load_option_trades(status="open")
+        platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+        options_exposure = 0.0
+        if open_opts:
+            opts_df = pd.DataFrame(open_opts)
+            if "platform_id" in opts_df.columns:
+                opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
+                platform_opts = opts_df[opts_df["Platform"] == platform]
+                if not platform_opts.empty:
+                    platform_opts["option_open_price"] = pd.to_numeric(platform_opts.get("option_open_price", 0), errors="coerce").fillna(0)
+                    platform_opts["transaction_type"] = platform_opts["transaction_type"].str.lower()
+                    platform_opts["Option Exposure"] = platform_opts.apply(
+                        lambda x: float(x["option_open_price"]) * 100.0 * (1 if x["transaction_type"] == "debit" else -1), 
+                        axis=1
+                    )
+                    options_exposure = platform_opts["Option Exposure"].sum()
+        
+        # Total Investment = equities + options (excluding cash)
+        total_investment = equity_investment + abs(options_exposure)
+        
+        if not equity_group.empty or options_exposure != 0:
+            total_portfolio_value = equity_group["current_value"].sum() if not equity_group.empty else 0.0
+            total_unrealized_gain = equity_group["unrealized_gain"].sum() if not equity_group.empty else 0.0
             percent_unrealized = (total_unrealized_gain / total_investment * 100) if total_investment else 0.0
             rows.append({
                 "Platform": platform,
