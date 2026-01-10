@@ -78,7 +78,7 @@ def cash_flows_ui() -> None:
         ).properties(width=200).facet(
             column=alt.Column('Year:N', title='Year')
         )
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(chart, width='stretch')
 
 def cash_flows_data_entry() -> None:
     """Streamlit UI for manual entry of cash deposits and withdrawals (for Data Entry screen)."""
