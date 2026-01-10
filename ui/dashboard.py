@@ -67,6 +67,68 @@ def compute_asset_allocation() -> pd.DataFrame:
         return pd.DataFrame(columns=["Platform", "Asset Type", "Amount"])
     return pd.DataFrame(rows)
 
+@st.cache_data(ttl=300, show_spinner=False)
+def get_total_investment_by_platform() -> pd.DataFrame:
+    """
+    Calculate total investment in cash by platform.
+    Total Investment = equities (trade_cost) + options exposure
+    """
+    portfolio_df = _get_portfolio_df()
+    rows = []
+    
+    # Get investment from positions (stocks and ETFs)
+    if not portfolio_df.empty:
+        platform_investment = portfolio_df.groupby("platform", as_index=False)["trade_cost"].sum()
+        for _, row in platform_investment.iterrows():
+            rows.append({
+                "Platform": row["platform"],
+                "Total Investment": round(float(row["trade_cost"] or 0.0), 2)
+            })
+    
+    # Add options exposure from open option trades
+    open_opts = load_option_trades(status="open")
+    if open_opts:
+        platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+        opts_df = pd.DataFrame(open_opts)
+        if "platform_id" in opts_df.columns:
+            opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
+        
+        opts_df["option_open_price"] = pd.to_numeric(opts_df.get("option_open_price", 0), errors="coerce").fillna(0)
+        opts_df["transaction_type"] = opts_df["transaction_type"].str.lower()
+        opts_df["Option Exposure"] = opts_df.apply(
+            lambda x: float(x["option_open_price"]) * 100.0 * (1 if x["transaction_type"] == "debit" else -1),
+            axis=1
+        )
+        opts_grp = opts_df.groupby("Platform", as_index=False)["Option Exposure"].sum()
+        
+        # Merge with existing investment data
+        if rows:
+            inv_df = pd.DataFrame(rows)
+            for _, opt_row in opts_grp.iterrows():
+                platform = opt_row["Platform"] or "Unknown"
+                option_exposure = float(opt_row["Option Exposure"] or 0.0)
+                existing = inv_df[inv_df["Platform"] == platform]
+                if not existing.empty:
+                    inv_df.loc[inv_df["Platform"] == platform, "Total Investment"] += option_exposure
+                else:
+                    rows.append({
+                        "Platform": platform,
+                        "Total Investment": round(option_exposure, 2)
+                    })
+        else:
+            for _, opt_row in opts_grp.iterrows():
+                rows.append({
+                    "Platform": opt_row["Platform"] or "Unknown",
+                    "Total Investment": round(float(opt_row["Option Exposure"] or 0.0), 2)
+                })
+    
+    if not rows:
+        return pd.DataFrame(columns=["Platform", "Total Investment"])
+    
+    result_df = pd.DataFrame(rows)
+    result_df["Total Investment"] = result_df["Total Investment"].round(2)
+    return result_df.sort_values("Platform").reset_index(drop=True)
+
 def dashboard():
     st.header("📊 Dashboard")
 
@@ -118,6 +180,17 @@ def dashboard():
                 st.dataframe(cash_summary_df, width="stretch", hide_index=True)
         else:
             st.info("No cash flows recorded.")
+    st.markdown("---")
+
+    # --- Total Investment by Platform ---
+    with st.spinner("Loading total investment by platform..."):
+        st.subheader("💼 Total Investment by Platform")
+        investment_df = get_total_investment_by_platform()
+        
+        if not investment_df.empty:
+            st.dataframe(investment_df, width="stretch", hide_index=True)
+        else:
+            st.info("No investment data available.")
     st.markdown("---")
 
     # --- Asset Allocation by Platform ---
