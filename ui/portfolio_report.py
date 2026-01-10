@@ -4,6 +4,7 @@ import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_positions, load_option_trades
 from typing import Optional, List, Dict
 import altair as alt
+from ui.utils import color_profit_loss, get_platform_id_to_name_map
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _get_ticker_prices(tickers: List[str]) -> Dict[str, Optional[float]]:
@@ -23,7 +24,7 @@ def _get_portfolio_df() -> pd.DataFrame:
     if not open_positions:
         return pd.DataFrame(columns=["platform", "ticker", "total_quantity", "average_price", "trade_cost", "current_price", "current_value", "unrealized_gain", "percent_profit_loss"])
     df = pd.DataFrame(open_positions)
-    platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+    platform_map = get_platform_id_to_name_map()
     df["platform"] = df["platform_id"].map(platform_map)
     summary = (
         df.groupby(["platform", "ticker"])
@@ -44,36 +45,18 @@ def _get_portfolio_df() -> pd.DataFrame:
 
 def get_position_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for each platform (investment, value, unrealized gain).
-    Total Investment = equities (trade_cost) + options exposure (excluding cash)."""
+    Total Investment = equities only (trade_cost). Options excluded as we don't have realtime options data."""
     portfolio_df = _get_portfolio_df()
     rows = []
     for platform in PLATFORM_CACHE.keys():
-        # Get equity investment from stocks and ETFs
+        # Get equity investment from stocks and ETFs only
         equity_group = portfolio_df[portfolio_df["platform"] == platform]
         equity_investment = equity_group["trade_cost"].sum() if not equity_group.empty else 0.0
         
-        # Get options exposure for this platform
-        open_opts = load_option_trades(status="open")
-        platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-        options_exposure = 0.0
-        if open_opts:
-            opts_df = pd.DataFrame(open_opts)
-            if "platform_id" in opts_df.columns:
-                opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
-                platform_opts = opts_df[opts_df["Platform"] == platform]
-                if not platform_opts.empty:
-                    platform_opts["option_open_price"] = pd.to_numeric(platform_opts.get("option_open_price", 0), errors="coerce").fillna(0)
-                    platform_opts["transaction_type"] = platform_opts["transaction_type"].str.lower()
-                    platform_opts["Option Exposure"] = platform_opts.apply(
-                        lambda x: float(x["option_open_price"]) * 100.0 * (1 if x["transaction_type"] == "debit" else -1), 
-                        axis=1
-                    )
-                    options_exposure = platform_opts["Option Exposure"].sum()
+        # Total Investment = equities only (no options)
+        total_investment = equity_investment
         
-        # Total Investment = equities + options (excluding cash)
-        total_investment = equity_investment + abs(options_exposure)
-        
-        if not equity_group.empty or options_exposure != 0:
+        if not equity_group.empty or total_investment > 0:
             total_portfolio_value = equity_group["current_value"].sum() if not equity_group.empty else 0.0
             total_unrealized_gain = equity_group["unrealized_gain"].sum() if not equity_group.empty else 0.0
             percent_unrealized = (total_unrealized_gain / total_investment * 100) if total_investment else 0.0
@@ -113,13 +96,6 @@ def portfolio_ui() -> None:
         if not summary_df.empty:
             highlight_cols = [col for col in summary_df.columns if col.lower() in ["total unrealized gains", "pct unrealized gain"]]
             if highlight_cols:
-                def color_profit_loss(val):
-                    try:
-                        v = float(str(val).replace('%',''))
-                    except:
-                        return ""
-                    color = "green" if v > 0 else ("red" if v < 0 else "black")
-                    return f"color: {color}"
                 styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
@@ -151,13 +127,6 @@ def portfolio_ui() -> None:
                     display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
                 highlight_cols = [col for col in display_df.columns if col.lower() in [ "percent_profit_loss", "unrealized_gain"]]
                 if highlight_cols:
-                    def color_profit_loss(val):
-                        try:
-                            v = float(str(val).replace('%',''))
-                        except:
-                            return ""
-                        color = "green" if v > 0 else ("red" if v < 0 else "black")
-                        return f"color: {color}"
                     styled_df = display_df.style.map(color_profit_loss, subset=highlight_cols)
                     st.dataframe(styled_df, width="stretch", hide_index=True)
                 else:

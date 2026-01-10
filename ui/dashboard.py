@@ -7,6 +7,7 @@ import altair as alt
 import pandas as pd
 import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_option_trades, get_total_cash_by_platform
+from ui.utils import get_platform_id_to_name_map, color_profit_loss
 from typing import Dict
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -43,7 +44,7 @@ def compute_asset_allocation() -> pd.DataFrame:
     open_opts = load_option_trades(status="open")
     if open_opts:
         # map platform ids to names
-        platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+        platform_map = get_platform_id_to_name_map()
         opts_df = pd.DataFrame(open_opts)
         if "platform_id" in opts_df.columns:
             opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
@@ -70,13 +71,14 @@ def compute_asset_allocation() -> pd.DataFrame:
 @st.cache_data(ttl=300, show_spinner=False)
 def get_total_investment_by_platform() -> pd.DataFrame:
     """
-    Calculate total investment in cash by platform.
-    Total Investment = equities (trade_cost) + options exposure
+    Calculate total investment in cash by platform (equities only, for portfolio summary).
+    Total Investment = equities (trade_cost) from stocks and ETFs only
+    (Options excluded as we are not pulling realtime options data)
     """
     portfolio_df = _get_portfolio_df()
     rows = []
     
-    # Get investment from positions (stocks and ETFs)
+    # Get investment from positions (stocks and ETFs only)
     if not portfolio_df.empty:
         platform_investment = portfolio_df.groupby("platform", as_index=False)["trade_cost"].sum()
         for _, row in platform_investment.iterrows():
@@ -85,43 +87,6 @@ def get_total_investment_by_platform() -> pd.DataFrame:
                 "Total Investment": round(float(row["trade_cost"] or 0.0), 2)
             })
     
-    # Add options exposure from open option trades
-    open_opts = load_option_trades(status="open")
-    if open_opts:
-        platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
-        opts_df = pd.DataFrame(open_opts)
-        if "platform_id" in opts_df.columns:
-            opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
-        
-        opts_df["option_open_price"] = pd.to_numeric(opts_df.get("option_open_price", 0), errors="coerce").fillna(0)
-        opts_df["transaction_type"] = opts_df["transaction_type"].str.lower()
-        opts_df["Option Exposure"] = opts_df.apply(
-            lambda x: float(x["option_open_price"]) * 100.0 * (1 if x["transaction_type"] == "debit" else -1),
-            axis=1
-        )
-        opts_grp = opts_df.groupby("Platform", as_index=False)["Option Exposure"].sum()
-        
-        # Merge with existing investment data
-        if rows:
-            inv_df = pd.DataFrame(rows)
-            for _, opt_row in opts_grp.iterrows():
-                platform = opt_row["Platform"] or "Unknown"
-                option_exposure = float(opt_row["Option Exposure"] or 0.0)
-                existing = inv_df[inv_df["Platform"] == platform]
-                if not existing.empty:
-                    inv_df.loc[inv_df["Platform"] == platform, "Total Investment"] += option_exposure
-                else:
-                    rows.append({
-                        "Platform": platform,
-                        "Total Investment": round(option_exposure, 2)
-                    })
-        else:
-            for _, opt_row in opts_grp.iterrows():
-                rows.append({
-                    "Platform": opt_row["Platform"] or "Unknown",
-                    "Total Investment": round(float(opt_row["Option Exposure"] or 0.0), 2)
-                })
-    
     if not rows:
         return pd.DataFrame(columns=["Platform", "Total Investment"])
     
@@ -129,12 +94,65 @@ def get_total_investment_by_platform() -> pd.DataFrame:
     result_df["Total Investment"] = result_df["Total Investment"].round(2)
     return result_df.sort_values("Platform").reset_index(drop=True)
 
+@st.cache_data(ttl=300, show_spinner=False)
+def get_total_investment_for_cashflow() -> pd.DataFrame:
+    """
+    Calculate total investment for cash flow tracking (includes both equities and options).
+    Total Investment = equities (trade_cost) + options exposure (excluding cash)
+    This is used for cash flow analysis to reflect total capital deployed.
+    """
+    portfolio_df = _get_portfolio_df()
+    rows = []
+    
+    # Get investment from positions (stocks and ETFs)
+    equity_investment_by_platform = {}
+    if not portfolio_df.empty:
+        equity_inv = portfolio_df.groupby("platform", as_index=False)["trade_cost"].sum()
+        for _, row in equity_inv.iterrows():
+            equity_investment_by_platform[row["platform"]] = float(row["trade_cost"] or 0.0)
+    
+    # Get options exposure for each platform
+    options_exposure_by_platform = {}
+    open_opts = load_option_trades(status="open")
+    if open_opts:
+        platform_map = get_platform_id_to_name_map()
+        opts_df = pd.DataFrame(open_opts)
+        if "platform_id" in opts_df.columns:
+            opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
+            opts_df["option_open_price"] = pd.to_numeric(opts_df.get("option_open_price", 0), errors="coerce").fillna(0)
+            opts_df["transaction_type"] = opts_df["transaction_type"].str.lower()
+            opts_df["Option Exposure"] = opts_df.apply(
+                lambda x: float(x["option_open_price"]) * 100.0 * (1 if x["transaction_type"] == "debit" else -1), 
+                axis=1
+            )
+            opts_inv = opts_df.groupby("Platform", as_index=False)["Option Exposure"].sum()
+            for _, row in opts_inv.iterrows():
+                options_exposure_by_platform[row["Platform"]] = float(row["Option Exposure"] or 0.0)
+    
+    # Combine equities and options for all platforms
+    all_platforms = set(equity_investment_by_platform.keys()) | set(options_exposure_by_platform.keys())
+    for platform in all_platforms:
+        equity_inv = equity_investment_by_platform.get(platform, 0.0)
+        options_exp = abs(options_exposure_by_platform.get(platform, 0.0))
+        total_inv = equity_inv + options_exp
+        if total_inv > 0 or equity_inv > 0 or options_exp > 0:
+            rows.append({
+                "Platform": platform,
+                "Total Investment": round(total_inv, 2)
+            })
+    
+    if not rows:
+        return pd.DataFrame(columns=["Platform", "Total Investment"])
+    
+    result_df = pd.DataFrame(rows)
+    return result_df.sort_values("Platform").reset_index(drop=True)
+
 def dashboard():
     st.header("📊 Dashboard")
 
-    # --- Cash Summary by Platform with ROI ---
+    # --- Cash Summary by Platform with Total Investment and ROI ---
     with st.spinner("Loading cash summary..."):
-        st.subheader("💵 Cash by Platform")
+        st.subheader("💵 Cash & Investment by Platform")
         cash_by_platform = get_total_cash_by_platform()
         
         if cash_by_platform:
@@ -148,19 +166,29 @@ def dashboard():
             
             cash_summary_df = pd.DataFrame(cash_summary_data)
             
-            # Get portfolio value per platform for ROI calculation
+            # Get portfolio value and investment per platform
             portfolio_df = _get_portfolio_df()
             platform_values = {}
             if not portfolio_df.empty:
                 for platform in portfolio_df["platform"].unique():
                     platform_values[platform] = portfolio_df[portfolio_df["platform"] == platform]["current_value"].sum()
             
+            # Add total investment (including both equities and options for cash flow tracking)
+            investment_df = get_total_investment_for_cashflow()
+            investment_map = {}
+            if not investment_df.empty:
+                investment_map = dict(zip(investment_df["Platform"], investment_df["Total Investment"]))
+            
+            cash_summary_df["Total Investment"] = cash_summary_df["Platform"].map(
+                lambda p: investment_map.get(p, 0.0)
+            )
+            
             # Add portfolio value and ROI
             cash_summary_df["Portfolio Value"] = cash_summary_df["Platform"].map(
                 lambda p: round(platform_values.get(p, 0), 2) if p in platform_values else 0
             )
             cash_summary_df["ROI %"] = cash_summary_df.apply(
-                lambda row: round((row["Portfolio Value"] / row["Total Cash"] - 1) * 100, 2) if row["Total Cash"] > 0 else 0,
+                lambda row: round((row["Portfolio Value"] / row["Total Investment"] - 1) * 100, 2) if row["Total Investment"] > 0 else 0,
                 axis=1
             )
             
@@ -180,17 +208,6 @@ def dashboard():
                 st.dataframe(cash_summary_df, width="stretch", hide_index=True)
         else:
             st.info("No cash flows recorded.")
-    st.markdown("---")
-
-    # --- Total Investment by Platform ---
-    with st.spinner("Loading total investment by platform..."):
-        st.subheader("💼 Total Investment by Platform")
-        investment_df = get_total_investment_by_platform()
-        
-        if not investment_df.empty:
-            st.dataframe(investment_df, width="stretch", hide_index=True)
-        else:
-            st.info("No investment data available.")
     st.markdown("---")
 
     # --- Asset Allocation by Platform ---
@@ -277,13 +294,6 @@ def dashboard():
         if not pos_mgr_df.empty:
             highlight_cols = [col for col in pos_mgr_df.columns if col.lower() in ["profit_loss", "gain", "total p/l (closed)", "pct_unrealized_gain"]]
             if highlight_cols:
-                def color_profit_loss(val):
-                    try:
-                        v = float(str(val).replace('%',''))
-                    except:
-                        return ""
-                    color = "green" if v > 0 else ("red" if v < 0 else "black")
-                    return f"color: {color}"
                 styled_df = pos_mgr_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
@@ -298,13 +308,6 @@ def dashboard():
         if not summary_df.empty:
             highlight_cols = [col for col in summary_df.columns if col.lower() in ["total unrealized gains", "pct unrealized gain"]]
             if highlight_cols:
-                def color_profit_loss(val):
-                    try:
-                        v = float(str(val).replace('%',''))
-                    except:
-                        return ""
-                    color = "green" if v > 0 else ("red" if v < 0 else "black")
-                    return f"color: {color}"
                 styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
@@ -319,13 +322,6 @@ def dashboard():
         if not opt_df.empty:
             highlight_cols = [col for col in opt_df.columns if col.lower() in ["profit_loss", "gain", "total option p/l (closed)"]]
             if highlight_cols:
-                def color_profit_loss(val):
-                    try:
-                        v = float(str(val).replace('%',''))
-                    except:
-                        return ""
-                    color = "green" if v > 0 else ("red" if v < 0 else "black")
-                    return f"color: {color}"
                 styled_df = opt_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
@@ -340,13 +336,6 @@ def dashboard():
         if not summary_df.empty:
             highlight_cols = [col for col in summary_df.columns if col.lower() in ["total gain/loss","total estimated tax"]]
             if highlight_cols:
-                def color_profit_loss(val):
-                    try:
-                        v = float(str(val).replace('%',''))
-                    except:
-                        return ""
-                    color = "green" if v > 0 else ("red" if v < 0 else "black")
-                    return f"color: {color}"
                 styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:

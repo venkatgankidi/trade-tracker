@@ -5,6 +5,7 @@ from ui.option_trades_ui import option_trades_data_entry
 from ui.cash_flows_ui import cash_flows_data_entry
 from db.db_utils import load_option_trades, close_option_trade, PLATFORM_CACHE
 from db.db_utils import get_last_upload_time
+from ui.utils import get_platform_id_to_name_map
 import datetime
 from typing import Optional, Dict, Any
 
@@ -38,7 +39,7 @@ def data_entry() -> None:
     st.header("❌ Close Option Trade")
     open_trades = load_option_trades(status="open")
     if open_trades:
-        platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+        platform_map = get_platform_id_to_name_map()
         def trade_label(trade: Dict[str, Any]) -> str:
             platform_name = platform_map.get(trade.get("platform_id"), "Unknown")
             return f"{trade['id']} |{platform_name} | {trade['ticker']} | {trade['strategy']}"

@@ -4,11 +4,7 @@ import datetime
 import pandas as pd
 from typing import Optional, List, Dict
 import altair as alt
-
-def _format_gain(x: Optional[float]) -> str:
-    """Format gain/loss with color for display."""
-    color = "green" if x and x > 0 else "red"
-    return f'<span style="color: {color}">{x:.2f}</span>' if x is not None else ""
+from ui.utils import get_platform_id_to_name_map, color_profit_loss
 
 def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], drop_cols: List[str], move_cols: List[str]) -> pd.DataFrame:
     """Map platform_id to name, drop and reorder columns as needed."""
@@ -46,7 +42,7 @@ def get_option_trades_summary() -> pd.DataFrame:
 def option_trades_ui() -> None:
     """Streamlit UI for viewing option trades. No data entry or closing form here."""
     st.title("📈 Option Trades")
-    platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+    platform_map = get_platform_id_to_name_map()
     with st.spinner("Loading option trades..."):
         closed_trades = (
             load_option_trades(status="expired") +
@@ -69,9 +65,6 @@ def option_trades_ui() -> None:
             # Highlight profit/loss columns if present
             highlight_cols = [col for col in df_open.columns if col in ["profit_loss"]]
             if highlight_cols:
-                def color_profit_loss(val):
-                    color = "green" if val > 0 else ("red" if val < 0 else "black")
-                    return f"color: {color}"
                 styled_df = df_open.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
@@ -109,9 +102,6 @@ def option_trades_ui() -> None:
             # Highlight profit/loss columns if present
             highlight_cols = [col for col in df_closed.columns if col in ["profit_loss", "gain", "percentage"]]
             if highlight_cols:
-                def color_profit_loss(val):
-                    color = "green" if val > 0 else ("red" if val < 0 else "black")
-                    return f"color: {color}"
                 styled_df = df_closed.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:

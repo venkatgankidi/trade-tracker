@@ -9,6 +9,7 @@ from db.db_utils import (
 )
 import datetime
 from typing import Optional
+from ui.utils import get_platform_id_to_name_map
 
 def get_cash_flow_summary() -> pd.DataFrame:
     """Returns a summary DataFrame of deposits and withdrawals per platform and year."""
@@ -17,7 +18,7 @@ def get_cash_flow_summary() -> pd.DataFrame:
         return pd.DataFrame(columns=["Year", "Platform", "Total Deposits", "Total Withdrawals", "Net Cash"])
     
     df = pd.DataFrame(cash_flows)
-    platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+    platform_map = get_platform_id_to_name_map()
     df["Platform"] = df["platform_id"].map(platform_map)
     df["flow_date"] = pd.to_datetime(df["flow_date"])
     df["Year"] = df["flow_date"].dt.year
@@ -49,7 +50,7 @@ def cash_flows_ui() -> None:
         return
     
     df = pd.DataFrame(cash_flows)
-    platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+    platform_map = get_platform_id_to_name_map()
     df["Platform"] = df["platform_id"].map(platform_map)
     df = df.drop(columns=["platform_id"], errors='ignore')
     

@@ -3,6 +3,7 @@ import pandas as pd
 import datetime
 import altair as alt
 from db.db_utils import load_closed_positions, load_option_trades
+from ui.utils import color_profit_loss
 
 LONG_TERM_TAX_RATE = 0.15
 SHORT_TERM_TAX_RATE = 0.24
@@ -99,13 +100,6 @@ def taxes_ui() -> None:
         st.subheader("Tax Summary by Year")
         highlight_cols = [col for col in summary_df.columns if col.lower() in ["total estimated tax", "total gain/loss"]]
         if highlight_cols:
-            def color_profit_loss(val):
-                try:
-                    v = float(str(val).replace('%',''))
-                except:
-                    return ""
-                color = "green" if v > 0 else ("red" if v < 0 else "black")
-                return f"color: {color}"
             styled_df = summary_df.style.map(color_profit_loss, subset=highlight_cols)
             st.dataframe(styled_df, width="stretch", hide_index=True)
         else:
@@ -141,13 +135,6 @@ def taxes_ui() -> None:
         st.subheader("Summary by Tax Year, Asset, and Term")
         highlight_cols = [col for col in df.columns if col.lower() in ["estimated tax", "gain/loss"]]
         if highlight_cols:
-            def color_profit_loss(val):
-                try:
-                    v = float(str(val).replace('%',''))
-                except:
-                    return ""
-                color = "green" if v > 0 else ("red" if v < 0 else "black")
-                return f"color: {color}"
             styled_df = df.style.map(color_profit_loss, subset=highlight_cols)
             st.dataframe(styled_df, width="stretch", hide_index=True)
         else:

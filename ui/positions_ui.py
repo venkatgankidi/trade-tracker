@@ -4,6 +4,7 @@ from db.db_utils import PLATFORM_CACHE
 import pandas as pd
 from typing import Optional, List
 import altair as alt
+from ui.utils import get_platform_id_to_name_map, color_profit_loss
 
 def _weighted_avg(df: pd.DataFrame, value_col: str, weight_col: str) -> float:
     """Compute weighted average for a DataFrame column."""
@@ -43,7 +44,7 @@ def positions_ui() -> None:
         if positions:
             df = pd.DataFrame(positions)
             if "platform_id" in df.columns:
-                platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+                platform_map = get_platform_id_to_name_map()
                 df["Platform"] = df["platform_id"].map(platform_map)
             for platform in sorted(df["Platform"].unique()):
                 with st.expander(f"{platform} - Open Positions 📈", expanded=False):
@@ -76,7 +77,7 @@ def positions_ui() -> None:
         if closed_positions:
             df_closed = pd.DataFrame(closed_positions)
             if "platform_id" in df_closed.columns:
-                platform_map = {v: k for k, v in PLATFORM_CACHE.cache.items()}
+                platform_map = get_platform_id_to_name_map()
                 df_closed["Platform"] = df_closed["platform_id"].map(platform_map)
             for platform in sorted(df_closed["Platform"].unique()):
                 with st.expander(f"{platform} - Closed Trades 📉", expanded=False):
@@ -96,13 +97,6 @@ def positions_ui() -> None:
                     st.markdown("**Summary by Ticker**")
                     highlight_cols = [col for col in summary_closed.columns if col.lower() in ["profit/loss"]]
                     if highlight_cols:
-                        def color_profit_loss(val):
-                            try:
-                                v = float(str(val).replace('%',''))
-                            except:
-                                return ""
-                            color = "green" if v > 0 else ("red" if v < 0 else "black")
-                            return f"color: {color}"
                         styled_df = summary_closed.style.map(color_profit_loss, subset=highlight_cols)
                         st.dataframe(styled_df, width="stretch", hide_index=True)
                     else:
