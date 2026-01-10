@@ -133,6 +133,10 @@ def option_trades_ui() -> None:
             with st.spinner("Fetching real-time option prices..."):
                 df_open = calculate_unrealized_pnl(df_open)
             
+            # Calculate and display total unrealized P&L
+            total_unrealized_pnl = df_open['unrealized_pnl'].sum() if 'unrealized_pnl' in df_open.columns else 0.0
+            st.subheader(f"📊 Total Unrealized Profit/Loss (Open Option Trades): {total_unrealized_pnl:.2f}")
+            
             df_open = _map_and_reorder_columns(
                 df_open,
                 platform_map,
