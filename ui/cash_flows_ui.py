@@ -75,9 +75,9 @@ def cash_flows_ui() -> None:
             y=alt.Y('Amount:Q', title='Amount ($)'),
             color=alt.Color('Type:N', title='Type'),
             xOffset=alt.XOffset('Type:N')
-        ).facet(
+        ).properties(width=200).facet(
             column=alt.Column('Year:N', title='Year')
-        ).properties(width=200)
+        )
         st.altair_chart(chart, use_container_width=True)
 
 def cash_flows_data_entry() -> None:
