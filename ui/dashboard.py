@@ -264,14 +264,7 @@ def dashboard():
             # Format and display
             highlight_cols = [col for col in cash_summary_df.columns if col.lower() in ["roi %"]]
             if highlight_cols:
-                def color_roi(val):
-                    try:
-                        v = float(val)
-                    except:
-                        return ""
-                    color = "green" if v > 0 else ("red" if v < 0 else "black")
-                    return f"color: {color}"
-                styled_df = cash_summary_df.style.map(color_roi, subset=highlight_cols)
+                styled_df = cash_summary_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
                 st.dataframe(cash_summary_df, width="stretch", hide_index=True)

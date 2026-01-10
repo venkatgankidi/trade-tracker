@@ -37,26 +37,6 @@ def apply_profit_loss_styling(df: pd.DataFrame, cols: List[str]):
         return df.style.map(color_profit_loss, subset=cols)
     return df
 
-
-def _is_market_open() -> bool:
-    """Check if US stock market is currently open (9:30 AM - 4:00 PM ET, Monday-Friday)."""
-    try:
-        eastern = pytz.timezone('US/Eastern')
-        now = datetime.datetime.now(eastern)
-        
-        # Market is closed on weekends
-        if now.weekday() >= 5:
-            return False
-        
-        # Market hours: 9:30 AM - 4:00 PM ET
-        market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
-        market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
-        
-        return market_open <= now <= market_close
-    except Exception:
-        return False
-
-
 def _extract_price_from_chain(chain_df, strike: float) -> Optional[float]:
     """Extract option price from chain dataframe using various fallback methods.
     

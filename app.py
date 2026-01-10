@@ -18,7 +18,7 @@ NAVIGATION = {
     "Positions": "\U0001F4D2 Positions",
     "Option Trades": "\U0001F4D1 Option Trades",
     "Weekly & Monthly P/L Report": "📊 P/L Trends",
-    "Cash Flows": "💰 Cash Flows",
+    "Cash Flows": "💵 Cash Flows",
     "Taxes": "\U0001F4B0 Taxes",
     "Data Entry": "\U0001F4DD Data Entry"
 }

@@ -41,7 +41,7 @@ def get_cash_flow_summary() -> pd.DataFrame:
 
 def cash_flows_ui() -> None:
     """Streamlit UI for viewing cash flows by platform and year."""
-    st.title("💰 Cash Deposits & Withdrawals")
+    st.title("💵 Cash Deposits & Withdrawals")
     
     cash_flows = load_cash_flows()
     if not cash_flows:
@@ -53,12 +53,12 @@ def cash_flows_ui() -> None:
     df["Platform"] = df["platform_id"].map(platform_map)
     df = df.drop(columns=["platform_id"], errors='ignore')
     
-    st.subheader("📊 All Cash Flows")
+    st.subheader("💵 All Cash Flows")
     display_df = df[["flow_date", "Platform", "flow_type", "amount", "notes"]].copy()
     display_df.columns = ["Date", "Platform", "Type", "Amount", "Notes"]
     st.dataframe(display_df, width="stretch", hide_index=True)
     
-    st.subheader("📈 Summary by Year and Platform")
+    st.subheader("💵 Summary by Year and Platform")
     summary_df = get_cash_flow_summary()
     if not summary_df.empty:
         st.dataframe(summary_df, width="stretch", hide_index=True)
