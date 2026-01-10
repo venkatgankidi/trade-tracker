@@ -4,7 +4,7 @@ import datetime
 import pandas as pd
 from typing import Optional, List, Dict
 import altair as alt
-from ui.utils import get_platform_id_to_name_map, color_profit_loss
+from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_option_price, get_batch_option_prices
 
 def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], drop_cols: List[str], move_cols: List[str]) -> pd.DataFrame:
     """Map platform_id to name, drop and reorder columns as needed."""
@@ -27,6 +27,74 @@ def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], dro
             df = df.drop(columns=[col], errors='ignore')
     # Only keep columns that exist in the DataFrame
     return df[[c for c in cols if c in df.columns]]
+
+
+def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
+    """Calculate unrealized P&L for open option trades using real-time prices.
+    
+    Args:
+        df: DataFrame with open option trades
+        
+    Returns:
+        DataFrame with added columns: current_price, unrealized_pnl
+    """
+    if df.empty:
+        df['current_price'] = None
+        df['unrealized_pnl'] = 0.0
+        return df
+    
+    # Extract strategy type from strategy column (e.g., 'call' from 'cash secured put')
+    df['option_type'] = df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
+    
+    # Group by ticker for batch fetching
+    current_prices = {}
+    for ticker in df['ticker'].unique():
+        ticker_trades = df[df['ticker'] == ticker].to_dict('records')
+        options_list = [
+            {
+                'strike': t['strike_price'],
+                'expiry': str(t['expiry_date']),
+                'type': t['option_type']
+            }
+            for t in ticker_trades
+        ]
+        
+        prices_df = get_batch_option_prices(ticker, options_list)
+        for _, row in prices_df.iterrows():
+            key = (ticker, row['strike'], str(row['expiry']), row['type'])
+            current_prices[key] = row.get('current_price')
+    
+    # Apply current prices and calculate unrealized P&L
+    df['current_price'] = df.apply(
+        lambda row: current_prices.get(
+            (row['ticker'], row['strike_price'], str(row['expiry_date']), row['option_type']),
+            None
+        ),
+        axis=1
+    )
+    
+    # Calculate unrealized P&L
+    def calc_pnl(row):
+        if row['current_price'] is None:
+            return None
+        
+        current_price = row['current_price']
+        open_price = row['option_open_price']
+        transaction_type = str(row['transaction_type']).lower()
+        
+        # For options, multiply by 100 (1 contract = 100 shares)
+        if transaction_type == 'credit':
+            # Sold the option: profit if it goes down
+            pnl = (open_price - current_price) * 100
+        else:
+            # Bought the option: profit if it goes up
+            pnl = (current_price - open_price) * 100
+        
+        return round(pnl, 2)
+    
+    df['unrealized_pnl'] = df.apply(calc_pnl, axis=1)
+    df = df.drop(columns=['option_type'], errors='ignore')
+    return df
 
 def get_option_trades_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for option trades (open/closed count and total P/L)."""
@@ -56,14 +124,28 @@ def option_trades_ui() -> None:
         open_trades = load_option_trades(status="open")
         if open_trades:
             df_open = pd.DataFrame(open_trades)
+            
+            # Calculate unrealized P&L with real-time prices
+            with st.spinner("Fetching real-time option prices..."):
+                df_open = calculate_unrealized_pnl(df_open)
+            
             df_open = _map_and_reorder_columns(
                 df_open,
                 platform_map,
                 drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date","id"],
                 move_cols=["Platform", "open_fee"]
             )
+            
+            # Reorder to show current_price and unrealized_pnl near the end
+            col_order = list(df_open.columns)
+            for col in ['current_price', 'unrealized_pnl']:
+                if col in col_order:
+                    col_order.remove(col)
+            col_order.extend(['current_price', 'unrealized_pnl'])
+            df_open = df_open[[c for c in col_order if c in df_open.columns]]
+            
             # Highlight profit/loss columns if present
-            highlight_cols = [col for col in df_open.columns if col in ["profit_loss"]]
+            highlight_cols = [col for col in df_open.columns if col in ["unrealized_pnl"]]
             if highlight_cols:
                 styled_df = df_open.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)
