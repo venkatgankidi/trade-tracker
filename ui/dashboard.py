@@ -7,7 +7,7 @@ import altair as alt
 import pandas as pd
 import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_option_trades, get_total_cash_by_platform
-from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_batch_option_prices, get_platform_option_exposure
+from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_batch_option_prices, get_platform_option_exposure, get_options_cost_basis, get_options_portfolio_value
 from typing import Dict
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -66,7 +66,45 @@ def compute_asset_allocation() -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 @st.cache_data(ttl=300, show_spinner=False)
-def get_total_investment_by_platform() -> pd.DataFrame:
+def get_total_portfolio_value_by_platform() -> pd.DataFrame:
+    """
+    Calculate current portfolio value for all platforms (equities + options).
+    Portfolio Value = equity current values + options current market values
+    This represents the current market value of all positions.
+    """
+    portfolio_df = _get_portfolio_df()
+    rows = []
+    
+    # Get portfolio value from positions (stocks and ETFs - current market value)
+    equity_value_by_platform = {}
+    if not portfolio_df.empty:
+        equity_val = portfolio_df.groupby("platform", as_index=False)["current_value"].sum()
+        for _, row in equity_val.iterrows():
+            equity_value_by_platform[row["platform"]] = float(row["current_value"] or 0.0)
+    
+    # Get options portfolio value (current market value) for each platform
+    options_value_by_platform = {}
+    open_opts = load_option_trades(status="open")
+    if open_opts:
+        options_value_by_platform = get_options_portfolio_value(open_opts)
+    
+    # Combine equities and options for all platforms
+    all_platforms = set(equity_value_by_platform.keys()) | set(options_value_by_platform.keys())
+    for platform in all_platforms:
+        equity_val = equity_value_by_platform.get(platform, 0.0)
+        options_val = options_value_by_platform.get(platform, 0.0)
+        total_val = equity_val + options_val
+        if total_val > 0 or equity_val > 0:
+            rows.append({
+                "Platform": platform,
+                "Portfolio Value": round(total_val, 2)
+            })
+    
+    if not rows:
+        return pd.DataFrame(columns=["Platform", "Portfolio Value"])
+    
+    result_df = pd.DataFrame(rows)
+    return result_df.sort_values("Platform").reset_index(drop=True)
     """
     Calculate total investment in cash by platform (equities only, for portfolio summary).
     Total Investment = equities (trade_cost) from stocks and ETFs only
@@ -95,39 +133,32 @@ def get_total_investment_by_platform() -> pd.DataFrame:
 def get_total_investment_for_cashflow() -> pd.DataFrame:
     """
     Calculate total investment for cash flow tracking (includes both equities and options).
-    Total Investment = equities (trade_cost) + options exposure (excluding cash)
-    This is used for cash flow analysis to reflect total capital deployed.
+    Total Investment = equities (trade_cost) + options cost basis (option_open_price * 100)
+    This represents what you paid for all positions.
     """
     portfolio_df = _get_portfolio_df()
     rows = []
     
-    # Get investment from positions (stocks and ETFs)
+    # Get investment from positions (stocks and ETFs - cost basis)
     equity_investment_by_platform = {}
     if not portfolio_df.empty:
         equity_inv = portfolio_df.groupby("platform", as_index=False)["trade_cost"].sum()
         for _, row in equity_inv.iterrows():
             equity_investment_by_platform[row["platform"]] = float(row["trade_cost"] or 0.0)
     
-    # Get options exposure for each platform
-    options_exposure_by_platform = {}
+    # Get options cost basis (what you paid) for each platform
+    options_cost_basis_by_platform = {}
     open_opts = load_option_trades(status="open")
     if open_opts:
-        platform_map = get_platform_id_to_name_map()
-        opts_df = pd.DataFrame(open_opts)
-        if "platform_id" in opts_df.columns:
-            opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
-            
-            # Use consolidated function to calculate option exposure
-            open_opts_with_platform = opts_df.to_dict('records')
-            options_exposure_by_platform = get_platform_option_exposure(open_opts_with_platform)
+        options_cost_basis_by_platform = get_options_cost_basis(open_opts)
     
     # Combine equities and options for all platforms
-    all_platforms = set(equity_investment_by_platform.keys()) | set(options_exposure_by_platform.keys())
+    all_platforms = set(equity_investment_by_platform.keys()) | set(options_cost_basis_by_platform.keys())
     for platform in all_platforms:
         equity_inv = equity_investment_by_platform.get(platform, 0.0)
-        options_exp = abs(options_exposure_by_platform.get(platform, 0.0))
-        total_inv = equity_inv + options_exp
-        if total_inv > 0 or equity_inv > 0 or options_exp > 0:
+        options_cb = abs(options_cost_basis_by_platform.get(platform, 0.0))
+        total_inv = equity_inv + options_cb
+        if total_inv > 0 or equity_inv > 0 or options_cb > 0:
             rows.append({
                 "Platform": platform,
                 "Total Investment": round(total_inv, 2)
@@ -158,14 +189,7 @@ def dashboard():
             
             cash_summary_df = pd.DataFrame(cash_summary_data)
             
-            # Get portfolio value and investment per platform
-            portfolio_df = _get_portfolio_df()
-            platform_values = {}
-            if not portfolio_df.empty:
-                for platform in portfolio_df["platform"].unique():
-                    platform_values[platform] = portfolio_df[portfolio_df["platform"] == platform]["current_value"].sum()
-            
-            # Add total investment (including both equities and options for cash flow tracking)
+            # Get total investment (cost basis for equities + options)
             investment_df = get_total_investment_for_cashflow()
             investment_map = {}
             if not investment_df.empty:
@@ -175,10 +199,17 @@ def dashboard():
                 lambda p: investment_map.get(p, 0.0)
             )
             
-            # Add portfolio value and ROI
+            # Get portfolio value (current market value for equities + options)
+            portfolio_value_df = get_total_portfolio_value_by_platform()
+            portfolio_value_map = {}
+            if not portfolio_value_df.empty:
+                portfolio_value_map = dict(zip(portfolio_value_df["Platform"], portfolio_value_df["Portfolio Value"]))
+            
             cash_summary_df["Portfolio Value"] = cash_summary_df["Platform"].map(
-                lambda p: round(platform_values.get(p, 0), 2) if p in platform_values else 0
+                lambda p: portfolio_value_map.get(p, 0.0)
             )
+            
+            # Calculate ROI based on cost basis
             cash_summary_df["ROI %"] = cash_summary_df.apply(
                 lambda row: round((row["Portfolio Value"] / row["Total Investment"] - 1) * 100, 2) if row["Total Investment"] > 0 else 0,
                 axis=1

@@ -269,3 +269,123 @@ def get_platform_option_exposure(options_list: List[Dict]) -> Dict[str, float]:
             platform_exposure[row['Platform'] or 'Unknown'] = float(row['Option Exposure'] or 0.0)
     
     return platform_exposure
+
+
+def get_options_cost_basis(options_list: List[Dict]) -> Dict[str, float]:
+    """
+    Calculate cost basis (what you paid) for options grouped by platform.
+    Cost Basis = option_open_price * 100 * (1 for debit, -1 for credit)
+    
+    Args:
+        options_list: List of option trade dicts with keys: platform_id, option_open_price, transaction_type
+    
+    Returns:
+        Dict mapping platform name to total cost basis for open options
+    """
+    if not options_list:
+        return {}
+    
+    platform_cost_basis = {}
+    
+    # Get platform mapping
+    from db.db_utils import load_option_trades
+    platform_map = get_platform_id_to_name_map()
+    
+    # Convert to DataFrame for easier processing
+    opts_df = pd.DataFrame(options_list)
+    
+    # Map platform IDs to names
+    if 'platform_id' in opts_df.columns:
+        opts_df['Platform'] = opts_df['platform_id'].map(platform_map)
+    
+    # Ensure numeric types
+    opts_df['option_open_price'] = pd.to_numeric(opts_df.get('option_open_price', 0), errors='coerce').fillna(0)
+    opts_df['transaction_type'] = opts_df['transaction_type'].str.lower()
+    
+    # Calculate cost basis: option_open_price * 100 * (1 for debit, -1 for credit)
+    opts_df['Cost Basis'] = opts_df.apply(
+        lambda x: float(x['option_open_price'] or 0) * 100.0 * (1 if x['transaction_type'] == 'debit' else -1),
+        axis=1
+    )
+    
+    # Group by platform
+    if 'Platform' in opts_df.columns:
+        platform_cb = opts_df.groupby('Platform', as_index=False)['Cost Basis'].sum()
+        for _, row in platform_cb.iterrows():
+            platform_cost_basis[row['Platform'] or 'Unknown'] = float(row['Cost Basis'] or 0.0)
+    
+    return platform_cost_basis
+
+
+def get_options_portfolio_value(options_list: List[Dict]) -> Dict[str, float]:
+    """
+    Calculate current portfolio value for options grouped by platform using real-time prices.
+    Portfolio Value = current_price * 100 * (1 for debit, -1 for credit)
+    
+    Args:
+        options_list: List of option trade dicts with keys: platform_id, ticker, strike_price, expiry_date, option_type, transaction_type
+    
+    Returns:
+        Dict mapping platform name to total current portfolio value for open options
+    """
+    if not options_list:
+        return {}
+    
+    platform_portfolio_value = {}
+    
+    # Get platform mapping
+    platform_map = get_platform_id_to_name_map()
+    
+    # Convert to DataFrame for easier processing
+    opts_df = pd.DataFrame(options_list)
+    
+    # Map platform IDs to names
+    if 'platform_id' in opts_df.columns:
+        opts_df['Platform'] = opts_df['platform_id'].map(platform_map)
+    
+    # Extract option type and fetch current prices
+    opts_df['option_type'] = opts_df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
+    
+    # Fetch current prices for all options
+    current_prices = {}
+    for ticker in opts_df['ticker'].unique():
+        ticker_opts = opts_df[opts_df['ticker'] == ticker].to_dict('records')
+        options_list_for_ticker = [
+            {
+                'strike': t['strike_price'],
+                'expiry': str(t['expiry_date']),
+                'type': t['option_type']
+            }
+            for t in ticker_opts
+        ]
+        prices_df = get_batch_option_prices(ticker, options_list_for_ticker)
+        for _, row in prices_df.iterrows():
+            key = (ticker, row['strike'], str(row['expiry']), row['type'])
+            current_prices[key] = row.get('current_price', 0)
+    
+    # Apply current prices
+    opts_df['current_price'] = opts_df.apply(
+        lambda row: current_prices.get(
+            (row['ticker'], row['strike_price'], str(row['expiry_date']), row['option_type']),
+            row.get('option_open_price', 0)  # fallback to open price
+        ),
+        axis=1
+    )
+    
+    # Ensure numeric types
+    opts_df['current_price'] = pd.to_numeric(opts_df['current_price'], errors='coerce').fillna(0)
+    opts_df['transaction_type'] = opts_df['transaction_type'].str.lower()
+    
+    # Calculate portfolio value: current_price * 100 * (1 for debit, -1 for credit)
+    opts_df['Portfolio Value'] = opts_df.apply(
+        lambda x: float(x['current_price'] or 0) * 100.0 * (1 if x['transaction_type'] == 'debit' else -1),
+        axis=1
+    )
+    
+    # Group by platform
+    if 'Platform' in opts_df.columns:
+        platform_pv = opts_df.groupby('Platform', as_index=False)['Portfolio Value'].sum()
+        for _, row in platform_pv.iterrows():
+            platform_portfolio_value[row['Platform'] or 'Unknown'] = float(row['Portfolio Value'] or 0.0)
+    
+    return platform_portfolio_value
