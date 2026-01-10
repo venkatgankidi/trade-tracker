@@ -221,7 +221,7 @@ def dashboard():
 
     # --- Cash Summary by Platform with Total Investment and ROI ---
     with st.spinner("Loading cash summary..."):
-        st.subheader("💵 Cash & Investment by Platform")
+        st.subheader("💵 Summary by Platform")
         cash_by_platform = get_total_cash_by_platform()
         
         if cash_by_platform:
@@ -230,7 +230,7 @@ def dashboard():
             for platform, cash in sorted(cash_by_platform.items()):
                 cash_summary_data.append({
                     "Platform": platform,
-                    "Total Cash": round(cash, 2)
+                    "Deposits & Withdrawals": round(cash, 2)
                 })
             
             cash_summary_df = pd.DataFrame(cash_summary_data)
@@ -254,6 +254,19 @@ def dashboard():
             cash_summary_df["Portfolio Value"] = cash_summary_df["Platform"].map(
                 lambda p: portfolio_value_map.get(p, 0.0)
             )
+            
+            # Calculate Total Account Value and Cash Available
+            # Account Value: if investments = 0 then 0, else cash - investment + portfolio value
+            def calculate_account_value(row):
+                if row["Total Investment"] == 0:
+                    return 0.0
+                else:
+                    return row["Deposits & Withdrawals"] - row["Total Investment"] + row["Portfolio Value"]
+            
+            cash_summary_df["Total Account Value"] = cash_summary_df.apply(calculate_account_value, axis=1).round(2)
+            
+            # Cash Available = Deposits & Withdrawals - Total Investment
+            cash_summary_df["Cash Available"] = (cash_summary_df["Deposits & Withdrawals"] - cash_summary_df["Total Investment"]).round(2)
             
             # Calculate ROI based on cost basis
             cash_summary_df["ROI %"] = cash_summary_df.apply(

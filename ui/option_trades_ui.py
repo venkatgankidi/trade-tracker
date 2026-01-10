@@ -101,14 +101,23 @@ def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def get_option_trades_summary() -> pd.DataFrame:
-    """Returns a summary DataFrame for option trades (open/closed count and total P/L)."""
+    """Returns a summary DataFrame for option trades (open/closed count and total P/L, plus unrealized gains)."""
     open_trades = load_option_trades(status="open")
     closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised") + load_option_trades(status="closed") + load_option_trades(status="assigned")
     total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
+    
+    # Calculate unrealized gains for open trades
+    total_unrealized_gains = 0.0
+    if open_trades:
+        df_open = pd.DataFrame(open_trades)
+        df_open = calculate_unrealized_pnl(df_open)
+        total_unrealized_gains = df_open['unrealized_pnl'].sum() if 'unrealized_pnl' in df_open.columns else 0.0
+    
     return pd.DataFrame([{
         "Open Option Trades": len(open_trades),
         "Closed Option Trades": len(closed_trades),
-        "Total Option P/L (Closed)": round(total_pnl, 2)
+        "Total Option P/L (Closed)": round(total_pnl, 2),
+        "Unrealized Gains": round(total_unrealized_gains, 2)
     }])
 
 def option_trades_ui() -> None:
