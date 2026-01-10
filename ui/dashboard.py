@@ -7,7 +7,7 @@ import altair as alt
 import pandas as pd
 import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_option_trades, get_total_cash_by_platform
-from ui.utils import get_platform_id_to_name_map, color_profit_loss
+from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_batch_option_prices
 from typing import Dict
 
 @st.cache_data(ttl=3600, show_spinner=False)

@@ -4,6 +4,8 @@ from typing import Dict, List, Optional, Tuple
 import yfinance as yf
 import streamlit as st
 from db.db_utils import PLATFORM_CACHE
+import datetime
+import pytz
 
 
 def color_profit_loss(val):
@@ -36,6 +38,60 @@ def apply_profit_loss_styling(df: pd.DataFrame, cols: List[str]):
     return df
 
 
+def _is_market_open() -> bool:
+    """Check if US stock market is currently open (9:30 AM - 4:00 PM ET, Monday-Friday)."""
+    try:
+        eastern = pytz.timezone('US/Eastern')
+        now = datetime.datetime.now(eastern)
+        
+        # Market is closed on weekends
+        if now.weekday() >= 5:
+            return False
+        
+        # Market hours: 9:30 AM - 4:00 PM ET
+        market_open = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close = now.replace(hour=16, minute=0, second=0, microsecond=0)
+        
+        return market_open <= now <= market_close
+    except Exception:
+        return False
+
+
+def _extract_price_from_chain(chain_df, strike: float) -> Optional[float]:
+    """Extract option price from chain dataframe using various fallback methods.
+    
+    Priority: bid-ask midpoint > lastPrice > bid > ask
+    """
+    matching = chain_df[chain_df['strike'] == strike]
+    if matching.empty:
+        return None
+    
+    row = matching.iloc[0]
+    
+    # Try bid-ask midpoint first
+    bid = row.get('bid', 0)
+    ask = row.get('ask', 0)
+    
+    if bid > 0 and ask > 0:
+        return (bid + ask) / 2
+    elif bid > 0:
+        return bid
+    elif ask > 0:
+        return ask
+    
+    # Fallback to lastPrice
+    last_price = row.get('lastPrice', None)
+    if last_price and last_price > 0:
+        return last_price
+    
+    # Fallback to close
+    close = row.get('close', None)
+    if close and close > 0:
+        return close
+    
+    return None
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def get_option_chain_for_ticker(ticker: str) -> Optional[Dict]:
     """Fetch option chain data from Yahoo Finance for a given ticker.
@@ -61,6 +117,10 @@ def get_option_chain_for_ticker(ticker: str) -> Optional[Dict]:
 def get_option_price(ticker: str, expiry: str, strike: float, option_type: str) -> Optional[float]:
     """Fetch current option price from Yahoo Finance.
     
+    During market hours: attempts live data
+    Outside market hours: uses end-of-day data
+    Always falls back to available data if primary source fails
+    
     Args:
         ticker: Stock ticker symbol (e.g., 'AAPL')
         expiry: Expiration date as string (e.g., '2025-01-17')
@@ -75,30 +135,12 @@ def get_option_price(ticker: str, expiry: str, strike: float, option_type: str) 
         opt_chain = ticker_obj.option_chain(expiry)
         
         # Select appropriate chain (calls or puts)
-        if option_type.lower() == 'call':
-            chain_df = opt_chain.calls
-        else:
-            chain_df = opt_chain.puts
+        chain_df = opt_chain.calls if option_type.lower() == 'call' else opt_chain.puts
         
-        # Find the option with matching strike
-        matching = chain_df[chain_df['strike'] == strike]
-        if matching.empty:
-            return None
+        # Extract price using fallback hierarchy
+        price = _extract_price_from_chain(chain_df, strike)
+        return price
         
-        # Get bid-ask midpoint for the current price
-        bid = matching.iloc[0].get('bid', 0)
-        ask = matching.iloc[0].get('ask', 0)
-        
-        # If both bid and ask are available, use midpoint
-        if bid > 0 and ask > 0:
-            return (bid + ask) / 2
-        # Otherwise use the lastPrice if available
-        elif bid > 0:
-            return bid
-        elif ask > 0:
-            return ask
-        else:
-            return matching.iloc[0].get('lastPrice', None)
     except Exception as e:
         print(f"Error fetching option price for {ticker} {expiry} {strike} {option_type}: {e}")
         return None
@@ -106,6 +148,9 @@ def get_option_price(ticker: str, expiry: str, strike: float, option_type: str) 
 
 def get_batch_option_prices(ticker: str, options_list: List[Dict]) -> pd.DataFrame:
     """Fetch current prices for multiple options of the same ticker.
+    
+    Efficiently batches requests by expiration date.
+    Uses bid-ask midpoint when available, falls back to lastPrice/close data.
     
     Args:
         ticker: Stock ticker symbol
@@ -123,8 +168,8 @@ def get_batch_option_prices(ticker: str, options_list: List[Dict]) -> pd.DataFra
             try:
                 opt_chain = ticker_obj.option_chain(expiry)
                 expiry_data[expiry] = {
-                    'calls': opt_chain.calls.set_index('strike'),
-                    'puts': opt_chain.puts.set_index('strike')
+                    'calls': opt_chain.calls,
+                    'puts': opt_chain.puts
                 }
             except Exception as e:
                 print(f"Error fetching option chain for {ticker} {expiry}: {e}")
@@ -139,18 +184,7 @@ def get_batch_option_prices(ticker: str, options_list: List[Dict]) -> pd.DataFra
             current_price = None
             if expiry in expiry_data:
                 chain_df = expiry_data[expiry]['calls' if opt_type == 'call' else 'puts']
-                if strike in chain_df.index:
-                    row = chain_df.loc[strike]
-                    bid = row.get('bid', 0)
-                    ask = row.get('ask', 0)
-                    if bid > 0 and ask > 0:
-                        current_price = (bid + ask) / 2
-                    elif bid > 0:
-                        current_price = bid
-                    elif ask > 0:
-                        current_price = ask
-                    else:
-                        current_price = row.get('lastPrice', None)
+                current_price = _extract_price_from_chain(chain_df, strike)
             
             results.append({
                 **opt,

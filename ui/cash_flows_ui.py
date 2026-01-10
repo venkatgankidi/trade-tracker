@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import altair as alt
 from db.db_utils import (
     load_cash_flows,
     PLATFORM_CACHE,
@@ -63,23 +62,6 @@ def cash_flows_ui() -> None:
     summary_df = get_cash_flow_summary()
     if not summary_df.empty:
         st.dataframe(summary_df, width="stretch", hide_index=True)
-        
-        # Chart: Net cash by year and platform
-        melted = summary_df.melt(
-            id_vars=["Year", "Platform"],
-            value_vars=["Total Deposits", "Total Withdrawals", "Net Cash"],
-            var_name="Type",
-            value_name="Amount"
-        )
-        chart = alt.Chart(melted).mark_bar().encode(
-            x=alt.X('Platform:N', title='Platform'),
-            y=alt.Y('Amount:Q', title='Amount ($)'),
-            color=alt.Color('Type:N', title='Type'),
-            xOffset=alt.XOffset('Type:N')
-        ).properties(width=200).facet(
-            column=alt.Column('Year:N', title='Year')
-        )
-        st.altair_chart(chart, width='stretch')
 
 def cash_flows_data_entry() -> None:
     """Streamlit UI for manual entry of cash deposits and withdrawals (for Data Entry screen)."""
