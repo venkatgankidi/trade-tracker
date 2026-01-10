@@ -117,13 +117,20 @@ def get_option_trades_summary() -> pd.DataFrame:
         "Open Option Trades": len(open_trades),
         "Closed Option Trades": len(closed_trades),
         "Total Option P/L (Closed)": round(total_pnl, 2),
-        "Unrealized Gains": round(total_unrealized_gains, 2)
+        "Unrealized Gains (Open)": round(total_unrealized_gains, 2)
     }])
 
 def option_trades_ui() -> None:
     """Streamlit UI for viewing option trades. No data entry or closing form here."""
     st.title("📈 Option Trades")
     platform_map = get_platform_id_to_name_map()
+    # Manual refresh control for option chains (clears relevant cached data)
+    if st.button("🔄 Refresh Option Chains"):
+        # Clears all st.cache_data caches (including option chains) to force fresh fetches
+        st.cache_data.clear()
+        st.success("Option chain cache cleared — refreshing data...")
+        st.rerun()
+
     with st.spinner("Loading option trades..."):
         # Calculate closed trades total P/L
         closed_trades = (
@@ -147,7 +154,9 @@ def option_trades_ui() -> None:
                 df_open = calculate_unrealized_pnl(df_open)
             
             total_unrealized_pnl = df_open['unrealized_pnl'].sum() if 'unrealized_pnl' in df_open.columns else 0.0
-        st.subheader(f"📊 Total Unrealized Profit/Loss (Open Option Trades): {total_unrealized_pnl:.2f}")
+        # Colorize unrealized P&L: green for positive, red for negative, black for zero
+        color = "green" if total_unrealized_pnl > 0 else ("red" if total_unrealized_pnl < 0 else "black")
+        st.markdown(f"**📊 Total Unrealized Profit/Loss (Open Option Trades):** <span style='color:{color}'>{total_unrealized_pnl:.2f}</span>", unsafe_allow_html=True)
         
         st.header("🟢 Open Option Trades")
         if df_open is not None:

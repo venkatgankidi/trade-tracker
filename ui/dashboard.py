@@ -265,22 +265,15 @@ def dashboard():
             
             cash_summary_df["Total Account Value"] = cash_summary_df.apply(calculate_account_value, axis=1).round(2)
             
-            # Cash Available = Deposits & Withdrawals - Total Investment
-            cash_summary_df["Cash Available"] = (cash_summary_df["Deposits & Withdrawals"] - cash_summary_df["Total Investment"]).round(2)
-            
-            # Calculate ROI based on cost basis
-            cash_summary_df["ROI %"] = cash_summary_df.apply(
-                lambda row: round((row["Portfolio Value"] / row["Total Investment"] - 1) * 100, 2) if row["Total Investment"] > 0 else 0,
-                axis=1
-            )
-            
-            # Format and display
-            highlight_cols = [col for col in cash_summary_df.columns if col.lower() in ["roi %"]]
-            if highlight_cols:
-                styled_df = cash_summary_df.style.map(color_profit_loss, subset=highlight_cols)
-                st.dataframe(styled_df, width="stretch", hide_index=True)
-            else:
-                st.dataframe(cash_summary_df, width="stretch", hide_index=True)
+            # Cash Available = 0 when there is no investment; otherwise Deposits & Withdrawals - Total Investment
+            def calculate_cash_available(row):
+                if row["Total Investment"] == 0:
+                    return 0.0
+                return row["Deposits & Withdrawals"] - row["Total Investment"]
+            cash_summary_df["Cash Available"] = cash_summary_df.apply(calculate_cash_available, axis=1).round(2)
+
+            # Format and display (no ROI column shown)
+            st.dataframe(cash_summary_df, width="stretch", hide_index=True)
         else:
             st.info("No cash flows recorded.")
     st.markdown("---")
@@ -395,7 +388,7 @@ def dashboard():
         st.subheader("📝 Option Trades Summary")
         opt_df = get_option_trades_summary()
         if not opt_df.empty:
-            highlight_cols = [col for col in opt_df.columns if col.lower() in ["profit_loss", "gain", "total option p/l (closed)"]]
+            highlight_cols = [col for col in opt_df.columns if col.lower() in ["profit_loss", "gain", "total option p/l (closed)", "unrealized gains (open)"]]
             if highlight_cols:
                 styled_df = opt_df.style.map(color_profit_loss, subset=highlight_cols)
                 st.dataframe(styled_df, width="stretch", hide_index=True)

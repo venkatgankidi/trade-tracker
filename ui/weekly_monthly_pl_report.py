@@ -4,6 +4,7 @@ import altair as alt
 from db.db_utils import load_closed_positions, load_option_trades, PLATFORM_CACHE
 import datetime
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_weekly_pl_stocks():
     """Aggregate weekly profit/loss for stocks from closed positions."""
     closed_positions = load_closed_positions()
@@ -18,6 +19,7 @@ def get_weekly_pl_stocks():
     weekly = weekly.rename(columns={"profit_loss": "Stock P/L"})
     return weekly
 
+@st.cache_data(ttl=300, show_spinner=False)
 def get_weekly_pl_options():
     """Aggregate weekly profit/loss for options from closed option trades."""
     closed_options = [t for t in load_option_trades() if t.get("status") in ("closed", "expired", "exercised")]
@@ -71,10 +73,11 @@ def weekly_monthly_pl_report_ui():
     def week_ending(year, week):
         # Use ISO weekday 5 (Friday) as the trading week end instead of Sunday (7)
         return datetime.date.fromisocalendar(int(year), int(week), 5)
-    merged_weekly["Stock P/L"] = [float(x) for x in merged_weekly["Stock P/L"]]
-    merged_weekly["Option P/L"] = [float(x) for x in merged_weekly["Option P/L"]]
-    merged_weekly["Total P/L"] = merged_weekly["Stock P/L"] + merged_weekly["Option P/L"]
-    merged_weekly["Week Ending"] = [week_ending(row["Year"], row["Week"]) for _, row in merged_weekly.iterrows()]
+    # Vectorized numeric conversions
+    merged_week["Stock P/L"] = pd.to_numeric(merged_week["Stock P/L"], errors="coerce").fillna(0.0)
+    merged_week["Option P/L"] = pd.to_numeric(merged_week["Option P/L"], errors="coerce").fillna(0.0)
+    merged_week["Total P/L"] = merged_week["Stock P/L"] + merged_week["Option P/L"]
+    merged_week["Week Ending"] = merged_week.apply(lambda r: week_ending(int(r["Year"]), int(r["Week"])), axis=1)
     display_cols_week = ["Year", "Week Ending", "Stock P/L", "Option P/L", "Total P/L"]
     st.subheader("Weekly P/L Table")
     st.dataframe(merged_weekly[display_cols_week], width="stretch", hide_index=True)
@@ -93,8 +96,9 @@ def weekly_monthly_pl_report_ui():
     stock_monthly = get_monthly_pl_stocks()
     option_monthly = get_monthly_pl_options()
     merged_monthly = pd.merge(stock_monthly, option_monthly, on=["Year", "Month"], how="outer").fillna(0)
-    merged_monthly["Stock P/L"] = [float(x) for x in merged_monthly["Stock P/L"]]
-    merged_monthly["Option P/L"] = [float(x) for x in merged_monthly["Option P/L"]]
+    # Vectorized numeric conversions
+    merged_monthly["Stock P/L"] = pd.to_numeric(merged_monthly["Stock P/L"], errors="coerce").fillna(0.0)
+    merged_monthly["Option P/L"] = pd.to_numeric(merged_monthly["Option P/L"], errors="coerce").fillna(0.0)
     merged_monthly["Total P/L"] = merged_monthly["Stock P/L"] + merged_monthly["Option P/L"]
     merged_monthly["Month Name"] = merged_monthly["Month"].apply(lambda m: datetime.date(1900, int(m), 1).strftime('%b'))
     display_cols_month = ["Year", "Month Name", "Stock P/L", "Option P/L", "Total P/L"]

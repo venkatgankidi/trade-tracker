@@ -13,9 +13,12 @@ def upload_csv() -> None:
     platform_type: str = st.selectbox("Select Platform Type", list(PLATFORM_CACHE.keys()))
     uploaded_file = st.file_uploader("Choose a file", type=["csv"])
     if uploaded_file:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".csv") as tmp_file:
-            tmp_file.write(uploaded_file.read())
-            tmp_path = tmp_file.name
+        # Read uploaded bytes directly without writing to a temp file
+        content = uploaded_file.read()
+        if isinstance(content, bytes):
+            s = content.decode("utf-8")
+        else:
+            s = str(content)
         try:
             with open("config/mapping_config.json", "r") as config_file:
                 mappings = json.load(config_file)
@@ -27,15 +30,14 @@ def upload_csv() -> None:
             try:
                 conn = st.connection("postgresql", type="sql")
                 rows: List[Dict[str, Any]] = []
-                with open(tmp_path, "r") as file:
-                    reader = csv.DictReader(file)
-                    for row in reader:
-                        mapped_row = {column_mapping[k]: v for k, v in row.items() if k in column_mapping and column_mapping[k]}
-                        # Validate required fields
-                        if not mapped_row.get("ticker") or not mapped_row.get("date"):
-                            continue
-                        mapped_row["platform_id"] = mapped_row.get("platform_id") if platform_type == "OTHER" else PLATFORM_CACHE.get(platform_type)
-                        rows.append(mapped_row)
+                reader = csv.DictReader(io.StringIO(s))
+                for row in reader:
+                    mapped_row = {column_mapping[k]: v for k, v in row.items() if k in column_mapping and column_mapping[k]}
+                    # Validate required fields
+                    if not mapped_row.get("ticker") or not mapped_row.get("date"):
+                        continue
+                    mapped_row["platform_id"] = mapped_row.get("platform_id") if platform_type == "OTHER" else PLATFORM_CACHE.get(platform_type)
+                    rows.append(mapped_row)
                 if not rows:
                     st.warning("No valid rows found in the uploaded file.")
                     return

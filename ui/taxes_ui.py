@@ -22,6 +22,7 @@ def _parse_date(dt):
         return dt
     return None
 
+@st.cache_data(ttl=300, show_spinner=False)
 def aggregate_gains():
     """Aggregate gains for stocks and options, grouped by year and term."""
     closed_positions = load_closed_positions()

@@ -94,33 +94,46 @@ def get_option_chain_for_ticker(ticker: str) -> Optional[Dict]:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
+def get_option_chain(ticker: str, expiry: str) -> Optional[Dict[str, pd.DataFrame]]:
+    """Fetch and cache the option chain (calls/puts) for a specific ticker and expiry.
+
+    Args:
+        ticker: Stock ticker symbol
+        expiry: Expiration date string
+
+    Returns:
+        Dict with 'calls' and 'puts' DataFrames or None on failure
+    """
+    try:
+        ticker_obj = yf.Ticker(ticker)
+        opt_chain = ticker_obj.option_chain(expiry)
+        return {"calls": opt_chain.calls, "puts": opt_chain.puts}
+    except Exception as e:
+        print(f"Error fetching option chain for {ticker} {expiry}: {e}")
+        return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def get_option_price(ticker: str, expiry: str, strike: float, option_type: str) -> Optional[float]:
-    """Fetch current option price from Yahoo Finance.
-    
-    During market hours: attempts live data
-    Outside market hours: uses end-of-day data
-    Always falls back to available data if primary source fails
-    
+    """Fetch current option price from a cached option chain.
+
+    Uses a cached per (ticker, expiry) option chain to avoid repeated network calls.
     Args:
         ticker: Stock ticker symbol (e.g., 'AAPL')
         expiry: Expiration date as string (e.g., '2025-01-17')
         strike: Strike price
         option_type: 'call' or 'put'
-        
+
     Returns:
         Current option price (bid-ask midpoint) or None if not found
     """
     try:
-        ticker_obj = yf.Ticker(ticker)
-        opt_chain = ticker_obj.option_chain(expiry)
-        
-        # Select appropriate chain (calls or puts)
-        chain_df = opt_chain.calls if option_type.lower() == 'call' else opt_chain.puts
-        
-        # Extract price using fallback hierarchy
+        chain = get_option_chain(ticker, expiry)
+        if not chain:
+            return None
+        chain_df = chain['calls'] if option_type.lower() == 'call' else chain['puts']
         price = _extract_price_from_chain(chain_df, strike)
         return price
-        
     except Exception as e:
         print(f"Error fetching option price for {ticker} {expiry} {strike} {option_type}: {e}")
         return None
@@ -140,37 +153,33 @@ def get_batch_option_prices(ticker: str, options_list: List[Dict]) -> pd.DataFra
         DataFrame with current prices added
     """
     try:
-        ticker_obj = yf.Ticker(ticker)
         unique_expiries = set(opt.get('expiry') for opt in options_list if opt.get('expiry'))
-        
         expiry_data = {}
+
+        # Fetch cached chains per expiry
         for expiry in unique_expiries:
-            try:
-                opt_chain = ticker_obj.option_chain(expiry)
-                expiry_data[expiry] = {
-                    'calls': opt_chain.calls,
-                    'puts': opt_chain.puts
-                }
-            except Exception as e:
-                print(f"Error fetching option chain for {ticker} {expiry}: {e}")
-        
+            chain = get_option_chain(ticker, expiry)
+            if chain:
+                expiry_data[expiry] = chain
+
         # Extract current prices
         results = []
         for opt in options_list:
             expiry = opt.get('expiry')
             strike = opt.get('strike')
             opt_type = opt.get('type', 'call').lower()
-            
+
             current_price = None
-            if expiry in expiry_data:
-                chain_df = expiry_data[expiry]['calls' if opt_type == 'call' else 'puts']
+            chain = expiry_data.get(expiry)
+            if chain is not None:
+                chain_df = chain['calls'] if opt_type == 'call' else chain['puts']
                 current_price = _extract_price_from_chain(chain_df, strike)
-            
+
             results.append({
                 **opt,
                 'current_price': current_price
             })
-        
+
         return pd.DataFrame(results)
     except Exception as e:
         print(f"Error in get_batch_option_prices: {e}")

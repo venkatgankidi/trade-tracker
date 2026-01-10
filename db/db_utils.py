@@ -18,6 +18,23 @@ class PlatformCache:
     def get(self, key: str) -> Optional[int]:
         return self.cache.get(key)
 
+    # Convenience methods to make the cache behave more like a dict
+    def __contains__(self, key: str) -> bool:
+        return key in self.cache
+
+    def __getitem__(self, key: str) -> int:
+        return self.cache[key]
+
+    def items(self):
+        return self.cache.items()
+
+    def values(self):
+        return self.cache.values()
+
+    def id_to_name_map(self) -> Dict[int, str]:
+        """Return mapping of platform_id -> platform_name."""
+        return {v: k for k, v in self.cache.items()}
+
 PLATFORM_CACHE = PlatformCache()
 
 def get_st_connection():
@@ -26,14 +43,17 @@ def get_st_connection():
 
 def load_platforms() -> None:
     """Load platforms from the database into the cache."""
+    # Only load if cache is empty
     if not PLATFORM_CACHE.cache:
         try:
             conn = get_st_connection()
             with conn.session as session:
-                result = session.execute(text("SELECT id, name FROM platforms ORDER BY name DESC"))
+                # Order by name ascending for predictable UI ordering
+                result = session.execute(text("SELECT id, name FROM platforms ORDER BY name ASC"))
                 PLATFORM_CACHE.cache = {row[1]: row[0] for row in result.fetchall()}
         except Exception as e:
             logger.error(f"Error connecting to the database: {e}")
+            PLATFORM_CACHE.cache = {}
 
 # --- Utility function for platform mapping ---
 def map_platform_id_to_name(platform_id: int, platform_cache: PlatformCache = PLATFORM_CACHE) -> Optional[str]:

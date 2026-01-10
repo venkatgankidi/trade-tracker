@@ -8,16 +8,41 @@ from ui.utils import color_profit_loss, get_platform_id_to_name_map
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _get_ticker_prices(tickers: List[str]) -> Dict[str, Optional[float]]:
-    """Fetch current prices for a list of tickers using yfinance. Cached for 5 minutes."""
-    price_map = {}
-    for ticker in tickers:
-        try:
-            price = yf.Ticker(ticker).history(period="1d", interval="1m")["Close"].iloc[-1]
-            price_map[ticker] = price
-        except Exception:
-            price_map[ticker] = None
+    """Fetch current prices for a list of tickers using yfinance (batched where possible)."""
+    price_map: Dict[str, Optional[float]] = {}
+    tickers = [t for t in tickers if t]
+    if not tickers:
+        return price_map
+    # Try batched download first (faster for many tickers)
+    try:
+        data = yf.download(tickers=" ".join(tickers), period="1d", interval="1m", group_by='ticker', threads=True)
+        if len(tickers) == 1:
+            t = tickers[0]
+            try:
+                price_map[t] = float(data["Close"].iloc[-1])
+            except Exception:
+                price_map[t] = None
+        else:
+            for t in tickers:
+                try:
+                    if isinstance(data.columns, pd.MultiIndex) and t in data.columns.levels[0]:
+                        close = data[t]["Close"].iloc[-1]
+                    else:
+                        close = data["Close"].iloc[-1] if "Close" in data.columns else None
+                    price_map[t] = float(close) if close is not None else None
+                except Exception:
+                    price_map[t] = None
+    except Exception:
+        # Fallback to per-ticker calls
+        for t in tickers:
+            try:
+                price = yf.Ticker(t).history(period="1d", interval="1m")["Close"].iloc[-1]
+                price_map[t] = float(price)
+            except Exception:
+                price_map[t] = None
     return price_map
 
+@st.cache_data(ttl=120, show_spinner=False)
 def _get_portfolio_df() -> pd.DataFrame:
     """Returns a DataFrame with portfolio holdings, including current price and unrealized gain/loss."""
     open_positions = load_positions()
@@ -40,7 +65,10 @@ def _get_portfolio_df() -> pd.DataFrame:
     summary["current_price"] = summary["ticker"].map(ticker_price_map)
     summary["current_value"] = summary["current_price"] * summary["total_quantity"]
     summary["unrealized_gain"] = summary["current_value"] - summary["trade_cost"]
-    summary["percent_profit_loss"] = (summary["unrealized_gain"] / summary["trade_cost"]) * 100
+    # Avoid division by zero and keep numeric conversions vectorized
+    summary["percent_profit_loss"] = summary.apply(
+        lambda r: (r["unrealized_gain"] / r["trade_cost"] * 100) if r["trade_cost"] else 0.0, axis=1
+    )
     return summary
 
 def get_position_summary() -> pd.DataFrame:
