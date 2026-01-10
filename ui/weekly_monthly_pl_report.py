@@ -74,10 +74,10 @@ def weekly_monthly_pl_report_ui():
         # Use ISO weekday 5 (Friday) as the trading week end instead of Sunday (7)
         return datetime.date.fromisocalendar(int(year), int(week), 5)
     # Vectorized numeric conversions
-    merged_week["Stock P/L"] = pd.to_numeric(merged_week["Stock P/L"], errors="coerce").fillna(0.0)
-    merged_week["Option P/L"] = pd.to_numeric(merged_week["Option P/L"], errors="coerce").fillna(0.0)
-    merged_week["Total P/L"] = merged_week["Stock P/L"] + merged_week["Option P/L"]
-    merged_week["Week Ending"] = merged_week.apply(lambda r: week_ending(int(r["Year"]), int(r["Week"])), axis=1)
+    merged_weekly["Stock P/L"] = pd.to_numeric(merged_weekly["Stock P/L"], errors="coerce").fillna(0.0)
+    merged_weekly["Option P/L"] = pd.to_numeric(merged_weekly["Option P/L"], errors="coerce").fillna(0.0)
+    merged_weekly["Total P/L"] = merged_weekly["Stock P/L"] + merged_weekly["Option P/L"]
+    merged_weekly["Week Ending"] = merged_weekly.apply(lambda r: week_ending(int(r["Year"]), int(r["Week"])), axis=1)
     display_cols_week = ["Year", "Week Ending", "Stock P/L", "Option P/L", "Total P/L"]
     st.subheader("Weekly P/L Table")
     st.dataframe(merged_weekly[display_cols_week], width="stretch", hide_index=True)

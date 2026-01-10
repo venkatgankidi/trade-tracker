@@ -1,7 +1,7 @@
 import streamlit as st
 import csv
 import json
-import tempfile
+import io
 from db.db_utils import PLATFORM_CACHE, set_last_upload_time
 from sqlalchemy import text
 from typing import Optional, List, Dict, Any
