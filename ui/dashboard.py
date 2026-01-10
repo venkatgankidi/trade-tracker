@@ -97,7 +97,6 @@ def dashboard():
             cash_summary_df["Portfolio Value"] = cash_summary_df["Platform"].map(
                 lambda p: round(platform_values.get(p, 0), 2) if p in platform_values else 0
             )
-            cash_summary_df["Total Invested"] = cash_summary_df["Total Cash"] + cash_summary_df["Portfolio Value"]
             cash_summary_df["ROI %"] = cash_summary_df.apply(
                 lambda row: round((row["Portfolio Value"] / row["Total Cash"] - 1) * 100, 2) if row["Total Cash"] > 0 else 0,
                 axis=1
