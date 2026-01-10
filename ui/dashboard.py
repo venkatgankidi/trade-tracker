@@ -7,7 +7,7 @@ import altair as alt
 import pandas as pd
 import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_option_trades, get_total_cash_by_platform
-from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_batch_option_prices
+from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_batch_option_prices, get_platform_option_exposure
 from typing import Dict
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -43,57 +43,23 @@ def compute_asset_allocation() -> pd.DataFrame:
     # Options: approximate exposure from open option trades
     open_opts = load_option_trades(status="open")
     if open_opts:
-        # map platform ids to names
         platform_map = get_platform_id_to_name_map()
         opts_df = pd.DataFrame(open_opts)
         if "platform_id" in opts_df.columns:
             opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
-        
-        # Calculate real-time option value
-        opts_df['option_type'] = opts_df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
-        
-        # Fetch current prices for all options
-        current_prices = {}
-        for ticker in opts_df['ticker'].unique():
-            ticker_opts = opts_df[opts_df['ticker'] == ticker].to_dict('records')
-            options_list = [
-                {
-                    'strike': t['strike_price'],
-                    'expiry': str(t['expiry_date']),
-                    'type': t['option_type']
-                }
-                for t in ticker_opts
-            ]
-            prices_df = get_batch_option_prices(ticker, options_list)
-            for _, row in prices_df.iterrows():
-                key = (ticker, row['strike'], str(row['expiry']), row['type'])
-                current_prices[key] = row.get('current_price')
-        
-        # Apply current prices
-        opts_df['current_price'] = opts_df.apply(
-            lambda row: current_prices.get(
-                (row['ticker'], row['strike_price'], str(row['expiry_date']), row['option_type']),
-                row.get('option_open_price', 0)  # fallback to open price if not found
-            ),
-            axis=1
-        )
-        
-        # compute premium * 100 per trade, debit positive/credit negative, using current price
-        opts_df["option_open_price"] = pd.to_numeric(opts_df.get("option_open_price", 0), errors="coerce").fillna(0)
-        opts_df["current_price"] = pd.to_numeric(opts_df.get("current_price", 0), errors="coerce").fillna(0)
-        opts_df["transaction_type"] = opts_df["transaction_type"].str.lower()
-        # For debit trades (buy): positive amount, for credit trades (sell): negative amount
-        opts_df["Option Exposure"] = opts_df.apply(
-            lambda x: float(x["current_price"]) * 100.0 * (1 if x["transaction_type"] == "debit" else -1), 
-            axis=1
-        )
-        opts_grp = opts_df.groupby("Platform", as_index=False)["Option Exposure"].sum()
-        for _, r in opts_grp.iterrows():
-            rows.append({
-                "Platform": r["Platform"] or "Unknown",
-                "Asset Type": "Options",
-                "Amount": float(r["Option Exposure"] or 0.0)
-            })
+            
+            # Add platform mapping for consolidated function
+            open_opts_with_platform = opts_df.to_dict('records')
+            platform_exposure = get_platform_option_exposure(open_opts_with_platform)
+            
+            # Add to rows
+            for platform, exposure in platform_exposure.items():
+                if exposure != 0:
+                    rows.append({
+                        "Platform": platform,
+                        "Asset Type": "Options",
+                        "Amount": float(exposure or 0.0)
+                    })
     
     if not rows:
         return pd.DataFrame(columns=["Platform", "Asset Type", "Amount"])
@@ -151,45 +117,9 @@ def get_total_investment_for_cashflow() -> pd.DataFrame:
         if "platform_id" in opts_df.columns:
             opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
             
-            # Calculate real-time option value
-            opts_df['option_type'] = opts_df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
-            
-            # Fetch current prices for all options
-            current_prices = {}
-            for ticker in opts_df['ticker'].unique():
-                ticker_opts = opts_df[opts_df['ticker'] == ticker].to_dict('records')
-                options_list = [
-                    {
-                        'strike': t['strike_price'],
-                        'expiry': str(t['expiry_date']),
-                        'type': t['option_type']
-                    }
-                    for t in ticker_opts
-                ]
-                prices_df = get_batch_option_prices(ticker, options_list)
-                for _, row in prices_df.iterrows():
-                    key = (ticker, row['strike'], str(row['expiry']), row['type'])
-                    current_prices[key] = row.get('current_price')
-            
-            # Apply current prices
-            opts_df['current_price'] = opts_df.apply(
-                lambda row: current_prices.get(
-                    (row['ticker'], row['strike_price'], str(row['expiry_date']), row['option_type']),
-                    row.get('option_open_price', 0)  # fallback to open price if not found
-                ),
-                axis=1
-            )
-            
-            opts_df["option_open_price"] = pd.to_numeric(opts_df.get("option_open_price", 0), errors="coerce").fillna(0)
-            opts_df["current_price"] = pd.to_numeric(opts_df.get("current_price", 0), errors="coerce").fillna(0)
-            opts_df["transaction_type"] = opts_df["transaction_type"].str.lower()
-            opts_df["Option Exposure"] = opts_df.apply(
-                lambda x: float(x["current_price"]) * 100.0 * (1 if x["transaction_type"] == "debit" else -1), 
-                axis=1
-            )
-            opts_inv = opts_df.groupby("Platform", as_index=False)["Option Exposure"].sum()
-            for _, row in opts_inv.iterrows():
-                options_exposure_by_platform[row["Platform"]] = float(row["Option Exposure"] or 0.0)
+            # Use consolidated function to calculate option exposure
+            open_opts_with_platform = opts_df.to_dict('records')
+            options_exposure_by_platform = get_platform_option_exposure(open_opts_with_platform)
     
     # Combine equities and options for all platforms
     all_platforms = set(equity_investment_by_platform.keys()) | set(options_exposure_by_platform.keys())

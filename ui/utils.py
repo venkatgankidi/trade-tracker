@@ -195,3 +195,77 @@ def get_batch_option_prices(ticker: str, options_list: List[Dict]) -> pd.DataFra
     except Exception as e:
         print(f"Error in get_batch_option_prices: {e}")
         return pd.DataFrame(options_list)
+
+
+def get_platform_option_exposure(options_list: List[Dict]) -> Dict[str, float]:
+    """Calculate option exposure by platform using real-time prices.
+    
+    Args:
+        options_list: List of option trade dicts
+        
+    Returns:
+        Dictionary mapping platform name to total option exposure
+    """
+    from db.db_utils import load_option_trades
+    
+    platform_exposure = {}
+    
+    if not options_list:
+        return platform_exposure
+    
+    # Convert to DataFrame for easier processing
+    opts_df = pd.DataFrame(options_list)
+    
+    if opts_df.empty:
+        return platform_exposure
+    
+    # Extract option type from strategy
+    opts_df['option_type'] = opts_df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
+    
+    # Ensure numeric columns are float type (handle Decimal from database)
+    opts_df['strike_price'] = pd.to_numeric(opts_df['strike_price'], errors='coerce')
+    
+    # Fetch current prices for all options grouped by ticker
+    current_prices = {}
+    for ticker in opts_df['ticker'].unique():
+        ticker_opts = opts_df[opts_df['ticker'] == ticker].to_dict('records')
+        options_list_for_ticker = [
+            {
+                'strike': float(t['strike_price']),
+                'expiry': str(t['expiry_date']),
+                'type': t['option_type']
+            }
+            for t in ticker_opts
+        ]
+        
+        prices_df = get_batch_option_prices(ticker, options_list_for_ticker)
+        for _, row in prices_df.iterrows():
+            key = (ticker, float(row['strike']), str(row['expiry']), row['type'])
+            current_prices[key] = row.get('current_price')
+    
+    # Apply current prices and calculate exposure
+    opts_df['current_price'] = opts_df.apply(
+        lambda row: current_prices.get(
+            (row['ticker'], float(row['strike_price']), str(row['expiry_date']), row['option_type']),
+            None
+        ),
+        axis=1
+    )
+    
+    # Convert to numeric and calculate exposure
+    opts_df['current_price'] = pd.to_numeric(opts_df['current_price'], errors='coerce')
+    opts_df['transaction_type'] = opts_df['transaction_type'].str.lower()
+    
+    # Calculate exposure: current_price * 100 * (1 for debit, -1 for credit)
+    opts_df['Option Exposure'] = opts_df.apply(
+        lambda x: float(x['current_price'] or 0) * 100.0 * (1 if x['transaction_type'] == 'debit' else -1),
+        axis=1
+    )
+    
+    # Group by platform
+    if 'Platform' in opts_df.columns:
+        platform_exp = opts_df.groupby('Platform', as_index=False)['Option Exposure'].sum()
+        for _, row in platform_exp.iterrows():
+            platform_exposure[row['Platform'] or 'Unknown'] = float(row['Option Exposure'] or 0.0)
+    
+    return platform_exposure

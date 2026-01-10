@@ -4,7 +4,7 @@ import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_positions, load_option_trades
 from typing import Optional, List, Dict
 import altair as alt
-from ui.utils import color_profit_loss, get_platform_id_to_name_map
+from ui.utils import color_profit_loss, get_platform_id_to_name_map, get_platform_option_exposure
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _get_ticker_prices(tickers: List[str]) -> Dict[str, Optional[float]]:
@@ -45,16 +45,29 @@ def _get_portfolio_df() -> pd.DataFrame:
 
 def get_position_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for each platform (investment, value, unrealized gain).
-    Total Investment = equities only (trade_cost). Options excluded as we don't have realtime options data."""
+    Total Investment includes both equities and options with real-time prices."""
     portfolio_df = _get_portfolio_df()
     rows = []
     for platform in PLATFORM_CACHE.keys():
-        # Get equity investment from stocks and ETFs only
+        # Get equity investment from stocks and ETFs
         equity_group = portfolio_df[portfolio_df["platform"] == platform]
         equity_investment = equity_group["trade_cost"].sum() if not equity_group.empty else 0.0
         
-        # Total Investment = equities only (no options)
-        total_investment = equity_investment
+        # Get options exposure for this platform
+        open_opts = load_option_trades(status="open")
+        options_exposure = 0.0
+        if open_opts:
+            opts_df = pd.DataFrame(open_opts)
+            platform_map = get_platform_id_to_name_map()
+            opts_df["Platform"] = opts_df["platform_id"].map(platform_map)
+            platform_opts = [opt for opt in open_opts if platform_map.get(opt.get("platform_id")) == platform]
+            if platform_opts:
+                # Use consolidated function to calculate option exposure
+                platform_exposure_dict = get_platform_option_exposure(platform_opts)
+                options_exposure = platform_exposure_dict.get(platform, 0.0)
+        
+        # Total Investment = equities + absolute value of options exposure
+        total_investment = equity_investment + abs(options_exposure)
         
         if not equity_group.empty or total_investment > 0:
             total_portfolio_value = equity_group["current_value"].sum() if not equity_group.empty else 0.0

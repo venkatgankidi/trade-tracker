@@ -46,13 +46,17 @@ def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
     # Extract strategy type from strategy column (e.g., 'call' from 'cash secured put')
     df['option_type'] = df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
     
+    # Ensure numeric columns are float type (handle Decimal from database)
+    df['strike_price'] = pd.to_numeric(df['strike_price'], errors='coerce')
+    df['option_open_price'] = pd.to_numeric(df['option_open_price'], errors='coerce')
+    
     # Group by ticker for batch fetching
     current_prices = {}
     for ticker in df['ticker'].unique():
         ticker_trades = df[df['ticker'] == ticker].to_dict('records')
         options_list = [
             {
-                'strike': t['strike_price'],
+                'strike': float(t['strike_price']),
                 'expiry': str(t['expiry_date']),
                 'type': t['option_type']
             }
@@ -61,13 +65,13 @@ def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
         
         prices_df = get_batch_option_prices(ticker, options_list)
         for _, row in prices_df.iterrows():
-            key = (ticker, row['strike'], str(row['expiry']), row['type'])
+            key = (ticker, float(row['strike']), str(row['expiry']), row['type'])
             current_prices[key] = row.get('current_price')
     
     # Apply current prices and calculate unrealized P&L
     df['current_price'] = df.apply(
         lambda row: current_prices.get(
-            (row['ticker'], row['strike_price'], str(row['expiry_date']), row['option_type']),
+            (row['ticker'], float(row['strike_price']), str(row['expiry_date']), row['option_type']),
             None
         ),
         axis=1
@@ -78,8 +82,8 @@ def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
         if row['current_price'] is None:
             return None
         
-        current_price = row['current_price']
-        open_price = row['option_open_price']
+        current_price = float(row['current_price'])
+        open_price = float(row['option_open_price'])
         transaction_type = str(row['transaction_type']).lower()
         
         # For options, multiply by 100 (1 contract = 100 shares)
