@@ -140,7 +140,8 @@ def option_trades_ui() -> None:
             load_option_trades(status="assigned")
         )
         total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
-        st.subheader(f"💰 Total Profit/Loss (Closed Option Trades): {total_pnl:.2f}")
+        color = "green" if total_pnl > 0 else ("red" if total_pnl < 0 else "black")
+        st.markdown(f"**💰 Total Profit/Loss (Closed Option Trades):** <span style='color:{color}'>{total_pnl:.2f}</span>", unsafe_allow_html=True)
         
         # Calculate total unrealized P&L for open trades
         open_trades = load_option_trades(status="open")
