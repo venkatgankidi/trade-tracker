@@ -4,7 +4,7 @@ import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_positions, load_option_trades
 from typing import Optional, List, Dict
 import altair as alt
-from ui.utils import color_profit_loss, get_platform_id_to_name_map, get_options_cost_basis, get_options_portfolio_value
+from ui.utils import color_profit_loss, get_platform_id_to_name_map
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _get_ticker_prices(tickers: List[str]) -> Dict[str, Optional[float]]:
@@ -45,47 +45,21 @@ def _get_portfolio_df() -> pd.DataFrame:
 
 def get_position_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for each platform (investment, value, unrealized gain).
-    Total Investment = cost basis (equities + options). Total Portfolio Value = current market value (equities + options)."""
+    Includes equities only (stocks and ETFs). Options excluded from portfolio summary."""
     portfolio_df = _get_portfolio_df()
     rows = []
     for platform in PLATFORM_CACHE.keys():
-        # Get equity investment (cost basis) from stocks and ETFs
+        # Get equity data (stocks and ETFs only)
         equity_group = portfolio_df[portfolio_df["platform"] == platform]
         equity_investment = equity_group["trade_cost"].sum() if not equity_group.empty else 0.0
         
-        # Get equity portfolio value (current market value)
-        equity_portfolio_value = equity_group["current_value"].sum() if not equity_group.empty else 0.0
-        
-        # Get options cost basis for this platform
-        open_opts = load_option_trades(status="open")
-        options_cost_basis = 0.0
-        options_portfolio_value = 0.0
-        if open_opts:
-            platform_map = get_platform_id_to_name_map()
-            platform_opts = [opt for opt in open_opts if platform_map.get(opt.get("platform_id")) == platform]
-            if platform_opts:
-                # Get cost basis (what you paid)
-                options_cb_dict = get_options_cost_basis(platform_opts)
-                options_cost_basis = abs(options_cb_dict.get(platform, 0.0))
-                
-                # Get portfolio value (current market value)
-                options_pv_dict = get_options_portfolio_value(platform_opts)
-                options_portfolio_value = options_pv_dict.get(platform, 0.0)
-        
-        # Total Investment = equities cost basis + options cost basis
-        total_investment = equity_investment + options_cost_basis
-        
-        # Total Portfolio Value = equity current value + options current value
-        total_portfolio_value = equity_portfolio_value + options_portfolio_value
-        
-        # Total Unrealized Gain = total portfolio value - total investment
-        total_unrealized_gain = total_portfolio_value - total_investment
-        
-        if not equity_group.empty or total_investment > 0:
-            percent_unrealized = (total_unrealized_gain / total_investment * 100) if total_investment else 0.0
+        if not equity_group.empty or equity_investment > 0:
+            total_portfolio_value = equity_group["current_value"].sum() if not equity_group.empty else 0.0
+            total_unrealized_gain = equity_group["unrealized_gain"].sum() if not equity_group.empty else 0.0
+            percent_unrealized = (total_unrealized_gain / equity_investment * 100) if equity_investment else 0.0
             rows.append({
                 "Platform": platform,
-                "Total Investment": round(total_investment, 2),
+                "Total Investment": round(equity_investment, 2),
                 "Total Portfolio Value": round(total_portfolio_value, 2),
                 "Total Unrealized Gains": round(total_unrealized_gain, 2),
                 "Pct Unrealized Gain": f"{round(percent_unrealized, 2)}%"

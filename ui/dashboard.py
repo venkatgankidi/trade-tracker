@@ -105,29 +105,75 @@ def get_total_portfolio_value_by_platform() -> pd.DataFrame:
     
     result_df = pd.DataFrame(rows)
     return result_df.sort_values("Platform").reset_index(drop=True)
-    """
-    Calculate total investment in cash by platform (equities only, for portfolio summary).
-    Total Investment = equities (trade_cost) from stocks and ETFs only
-    (Options excluded as we are not pulling realtime options data)
-    """
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_dashboard_position_summary() -> pd.DataFrame:
+    """Returns a summary DataFrame for each platform (investment, value, unrealized gain).
+    Includes both equities and options. This is dashboard-specific; portfolio_report shows equities only."""
     portfolio_df = _get_portfolio_df()
     rows = []
-    
-    # Get investment from positions (stocks and ETFs only)
-    if not portfolio_df.empty:
-        platform_investment = portfolio_df.groupby("platform", as_index=False)["trade_cost"].sum()
-        for _, row in platform_investment.iterrows():
+    for platform in PLATFORM_CACHE.keys():
+        # Get equity investment (cost basis) from stocks and ETFs
+        equity_group = portfolio_df[portfolio_df["platform"] == platform]
+        equity_investment = equity_group["trade_cost"].sum() if not equity_group.empty else 0.0
+        
+        # Get equity portfolio value (current market value)
+        equity_portfolio_value = equity_group["current_value"].sum() if not equity_group.empty else 0.0
+        
+        # Get options cost basis for this platform
+        open_opts = load_option_trades(status="open")
+        options_cost_basis = 0.0
+        options_portfolio_value = 0.0
+        if open_opts:
+            platform_map = get_platform_id_to_name_map()
+            platform_opts = [opt for opt in open_opts if platform_map.get(opt.get("platform_id")) == platform]
+            if platform_opts:
+                # Get cost basis (what you paid)
+                options_cb_dict = get_options_cost_basis(platform_opts)
+                options_cost_basis = abs(options_cb_dict.get(platform, 0.0))
+                
+                # Get portfolio value (current market value)
+                options_pv_dict = get_options_portfolio_value(platform_opts)
+                options_portfolio_value = options_pv_dict.get(platform, 0.0)
+        
+        # Total Investment = equities cost basis + options cost basis
+        total_investment = equity_investment + options_cost_basis
+        
+        # Total Portfolio Value = equity current value + options current value
+        total_portfolio_value = equity_portfolio_value + options_portfolio_value
+        
+        # Total Unrealized Gain = total portfolio value - total investment
+        total_unrealized_gain = total_portfolio_value - total_investment
+        
+        if not equity_group.empty or total_investment > 0:
+            percent_unrealized = (total_unrealized_gain / total_investment * 100) if total_investment else 0.0
             rows.append({
-                "Platform": row["platform"],
-                "Total Investment": round(float(row["trade_cost"] or 0.0), 2)
+                "Platform": platform,
+                "Total Investment": round(total_investment, 2),
+                "Total Portfolio Value": round(total_portfolio_value, 2),
+                "Total Unrealized Gains": round(total_unrealized_gain, 2),
+                "Pct Unrealized Gain": f"{round(percent_unrealized, 2)}%"
             })
-    
-    if not rows:
-        return pd.DataFrame(columns=["Platform", "Total Investment"])
-    
-    result_df = pd.DataFrame(rows)
-    result_df["Total Investment"] = result_df["Total Investment"].round(2)
-    return result_df.sort_values("Platform").reset_index(drop=True)
+    return pd.DataFrame(rows)
+
+@st.cache_data(ttl=300, show_spinner=False)
+def get_dashboard_position_summary_with_total() -> pd.DataFrame:
+    """Returns the dashboard position summary with an additional total row (includes equities + options)."""
+    summary_df = get_dashboard_position_summary()
+    if not summary_df.empty:
+        total_investment = summary_df["Total Investment"].sum()
+        total_value = summary_df["Total Portfolio Value"].sum()
+        total_unrealized = summary_df["Total Unrealized Gains"].sum()
+        percent_unrealized = (total_unrealized / total_investment * 100) if total_investment else 0.0
+        overall_row = {
+            "Platform": "Total",
+            "Total Investment": round(total_investment, 2),
+            "Total Portfolio Value": round(total_value, 2),
+            "Total Unrealized Gains": round(total_unrealized, 2),
+            "Pct Unrealized Gain": f"{round(percent_unrealized, 2)}%"
+        }
+        summary_df = pd.concat([summary_df, pd.DataFrame([overall_row])], ignore_index=True)
+    return summary_df
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_total_investment_for_cashflow() -> pd.DataFrame:
@@ -327,7 +373,7 @@ def dashboard():
 
     with st.spinner("Loading portfolio summary..."):
         st.subheader("💼 Portfolio Summary")
-        summary_df = get_position_summary_with_total()
+        summary_df = get_dashboard_position_summary_with_total()
         if not summary_df.empty:
             highlight_cols = [col for col in summary_df.columns if col.lower() in ["total unrealized gains", "pct unrealized gain"]]
             if highlight_cols:
