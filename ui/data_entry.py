@@ -98,7 +98,7 @@ def data_entry() -> None:
     else:
         st.info("No open option trades to close.")
     st.markdown("---")
-    st.header("🏦 Update Cash Available (True Account Value)")
+    st.header("🏦 Update Cash Available")
     # Platform list and current cash values
     platform_keys = list(PLATFORM_CACHE.keys())
     platform_cash_map = get_platform_cash_available_map()
@@ -107,7 +107,7 @@ def data_entry() -> None:
         with st.form("update_cash_available_form", clear_on_submit=False):
             platform = st.selectbox("Platform", platform_keys)
             current = platform_cash_map.get(platform, 0.0)
-            amount = st.number_input("Cash Available (True Account Value)", value=float(current), format="%.2f")
+            amount = st.number_input("Cash Available", value=float(current), format="%.2f")
             submitted = st.form_submit_button("Save Cash Available")
             if submitted:
                 platform_id = PLATFORM_CACHE.get(platform)

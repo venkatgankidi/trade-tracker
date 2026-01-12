@@ -498,7 +498,7 @@ def get_total_cash_by_platform() -> Dict[str, float]:
         return {row[0]: float(row[1]) for row in rows}
 
 
-# -- New helpers for platform-level cash (true account value) ------------
+# -- New helpers for platform-level cash ------------
 
 def set_platform_cash_available(platform_id: int, amount: float) -> None:
     """
@@ -508,8 +508,6 @@ def set_platform_cash_available(platform_id: int, amount: float) -> None:
     try:
         conn = get_st_connection()
         with conn.session as session:
-            # Ensure the column exists (safe to run multiple times)
-            session.execute(text("ALTER TABLE platforms ADD COLUMN IF NOT EXISTS cash_available NUMERIC(12,2) DEFAULT 0"))
             session.execute(
                 text("UPDATE platforms SET cash_available = :amount WHERE id = :platform_id"),
                 {"amount": float(amount), "platform_id": platform_id}
