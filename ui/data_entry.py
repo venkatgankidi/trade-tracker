@@ -104,8 +104,10 @@ def data_entry() -> None:
     platform_cash_map = get_platform_cash_available_map()
 
     if platform_keys:
+        # Selectbox outside form so it triggers rerun on platform change
+        platform = st.selectbox("Platform", platform_keys, key="cash_available_platform")
+        
         with st.form("update_cash_available_form", clear_on_submit=False):
-            platform = st.selectbox("Platform", platform_keys)
             current = platform_cash_map.get(platform, 0.0)
             amount = st.number_input("Cash Available", value=float(current), format="%.2f")
             submitted = st.form_submit_button("Save Cash Available")
