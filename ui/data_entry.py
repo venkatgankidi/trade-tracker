@@ -116,7 +116,7 @@ def data_entry() -> None:
                 else:
                     set_platform_cash_available(platform_id, amount)
                     st.success("Cash available updated.")
-                    st.experimental_rerun()
+                    st.rerun()
     else:
         st.info("No platforms available to update cash available.")
     st.markdown("---")
