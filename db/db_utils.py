@@ -497,3 +497,42 @@ def get_total_cash_by_platform() -> Dict[str, float]:
         rows = result.fetchall()
         return {row[0]: float(row[1]) for row in rows}
 
+
+# -- New helpers for platform-level cash (true account value) ------------
+
+def set_platform_cash_available(platform_id: int, amount: float) -> None:
+    """
+    Ensure `platforms.cash_available` exists and set it for a platform.
+    Clears `st.cache_data` after update.
+    """
+    try:
+        conn = get_st_connection()
+        with conn.session as session:
+            # Ensure the column exists (safe to run multiple times)
+            session.execute(text("ALTER TABLE platforms ADD COLUMN IF NOT EXISTS cash_available NUMERIC(12,2) DEFAULT 0"))
+            session.execute(
+                text("UPDATE platforms SET cash_available = :amount WHERE id = :platform_id"),
+                {"amount": float(amount), "platform_id": platform_id}
+            )
+            session.commit()
+        st.cache_data.clear()
+    except Exception as e:
+        logger.error(f"Failed to set platform cash_available: {e}")
+        raise
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def get_platform_cash_available_map() -> Dict[str, float]:
+    """
+    Return a mapping {platform_name: cash_available} (0.0 if null or missing).
+    """
+    try:
+        conn = get_st_connection()
+        with conn.session as session:
+            result = session.execute(text("SELECT name, COALESCE(cash_available, 0) FROM platforms ORDER BY name"))
+            rows = result.fetchall()
+            return {row[0]: float(row[1]) for row in rows}
+    except Exception as e:
+        logger.error(f"Failed to read platform cash_available: {e}")
+        return {}
+

@@ -1,6 +1,8 @@
 CREATE TABLE platforms (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(50) NOT NULL UNIQUE
+    name VARCHAR(50) NOT NULL UNIQUE,
+    -- Per-platform cash available (true account value). Can be used to store cash, dividends, interest, rewards, etc.
+    cash_available NUMERIC(12, 2) DEFAULT 0
 );
 
 CREATE TABLE trades (

@@ -3,7 +3,7 @@ from ui.trade_form import trade_form
 from ui.csv_upload import upload_csv
 from ui.option_trades_ui import option_trades_data_entry
 from ui.cash_flows_ui import cash_flows_data_entry
-from db.db_utils import load_option_trades, close_option_trade, PLATFORM_CACHE
+from db.db_utils import load_option_trades, close_option_trade, PLATFORM_CACHE, set_platform_cash_available, get_platform_cash_available_map
 from db.db_utils import get_last_upload_time
 from ui.utils import get_platform_id_to_name_map
 import datetime
@@ -97,6 +97,28 @@ def data_entry() -> None:
                         st.toast(f"Option trade {trade_id} closed as {close_status}.", icon="✅")
     else:
         st.info("No open option trades to close.")
+    st.markdown("---")
+    st.header("🏦 Update Cash Available (True Account Value)")
+    # Platform list and current cash values
+    platform_keys = list(PLATFORM_CACHE.keys())
+    platform_cash_map = get_platform_cash_available_map()
+
+    if platform_keys:
+        with st.form("update_cash_available_form", clear_on_submit=False):
+            platform = st.selectbox("Platform", platform_keys)
+            current = platform_cash_map.get(platform, 0.0)
+            amount = st.number_input("Cash Available (True Account Value)", value=float(current), format="%.2f")
+            submitted = st.form_submit_button("Save Cash Available")
+            if submitted:
+                platform_id = PLATFORM_CACHE.get(platform)
+                if platform_id is None:
+                    st.error("Invalid platform selected.")
+                else:
+                    set_platform_cash_available(platform_id, amount)
+                    st.success("Cash available updated.")
+                    st.experimental_rerun()
+    else:
+        st.info("No platforms available to update cash available.")
     st.markdown("---")
     st.header("💰 Cash Deposits & Withdrawals")
     cash_flows_data_entry()
