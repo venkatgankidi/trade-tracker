@@ -4,3 +4,6 @@ psycopg2-binary
 pandas
 yfinance
 sqlalchemy
+altair
+pytest
+pytest-mock

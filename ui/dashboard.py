@@ -241,38 +241,38 @@ def dashboard():
         
     st.subheader("💵 Summary by Platform")
 
-        # Build list of all platforms from both sources, stable sort
-        all_platforms = sorted(set(list(deposits_by_platform.keys()) + list(platform_cash_map.keys())))
-        if all_platforms:
-            cash_summary_data = []
-            for platform in all_platforms:
-                deposits = round(deposits_by_platform.get(platform, 0.0), 2)
-                cash_available = round(platform_cash_map.get(platform, deposits), 2)  # fallback to deposits if missing
-                cash_summary_data.append({
-                    "Platform": platform,
-                    "Deposits & Withdrawals": deposits,
-                    "Cash Available": cash_available
-                })
+    # Build list of all platforms from both sources, stable sort
+    all_platforms = sorted(set(list(deposits_by_platform.keys()) + list(platform_cash_map.keys())))
+    if all_platforms:
+        cash_summary_data = []
+        for platform in all_platforms:
+            deposits = round(deposits_by_platform.get(platform, 0.0), 2)
+            cash_available = round(platform_cash_map.get(platform, deposits), 2)  # fallback to deposits if missing
+            cash_summary_data.append({
+                "Platform": platform,
+                "Deposits & Withdrawals": deposits,
+                "Cash Available": cash_available
+            })
 
-            cash_summary_df = pd.DataFrame(cash_summary_data)
+        cash_summary_df = pd.DataFrame(cash_summary_data)
 
-            # Attach Total Investment and Portfolio Value like before
-            investment_df = get_total_investment_for_cashflow()
-            investment_map = dict(zip(investment_df["Platform"], investment_df["Total Investment"])) if not investment_df.empty else {}
-            cash_summary_df["Total Investment"] = cash_summary_df["Platform"].map(lambda p: investment_map.get(p, 0.0))
+        # Attach Total Investment and Portfolio Value like before
+        investment_df = get_total_investment_for_cashflow()
+        investment_map = dict(zip(investment_df["Platform"], investment_df["Total Investment"])) if not investment_df.empty else {}
+        cash_summary_df["Total Investment"] = cash_summary_df["Platform"].map(lambda p: investment_map.get(p, 0.0))
 
-            portfolio_value_df = get_total_portfolio_value_by_platform()
-            portfolio_value_map = dict(zip(portfolio_value_df["Platform"], portfolio_value_df["Portfolio Value"])) if not portfolio_value_df.empty else {}
-            cash_summary_df["Portfolio Value"] = cash_summary_df["Platform"].map(lambda p: portfolio_value_map.get(p, 0.0))
+        portfolio_value_df = get_total_portfolio_value_by_platform()
+        portfolio_value_map = dict(zip(portfolio_value_df["Platform"], portfolio_value_df["Portfolio Value"])) if not portfolio_value_df.empty else {}
+        cash_summary_df["Portfolio Value"] = cash_summary_df["Platform"].map(lambda p: portfolio_value_map.get(p, 0.0))
 
-            # Total Account Value = Cash Available + Portfolio Value (true account value)
-            cash_summary_df["Total Account Value"] = (cash_summary_df["Cash Available"] + cash_summary_df["Portfolio Value"]).round(2)
+        # Total Account Value = Cash Available + Portfolio Value (true account value)
+        cash_summary_df["Total Account Value"] = (cash_summary_df["Cash Available"] + cash_summary_df["Portfolio Value"]).round(2)
 
-            # Ensure Total Account Value is last column for display
-            display_cols = ["Platform", "Deposits & Withdrawals", "Cash Available", "Total Investment", "Portfolio Value", "Total Account Value"]
-            st.dataframe(cash_summary_df[display_cols], width="stretch", hide_index=True)
-        else:
-            st.info("No platform cash or cash flows recorded.")
+        # Ensure Total Account Value is last column for display
+        display_cols = ["Platform", "Deposits & Withdrawals", "Cash Available", "Total Investment", "Portfolio Value", "Total Account Value"]
+        st.dataframe(cash_summary_df[display_cols], width="stretch", hide_index=True)
+    else:
+        st.info("No platform cash or cash flows recorded.")
     st.markdown("---")
 
     # --- Asset Allocation by Platform ---
