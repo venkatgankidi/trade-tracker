@@ -6,6 +6,8 @@ import streamlit as st
 from db.db_utils import PLATFORM_CACHE
 import datetime
 import pytz
+from config import Config
+from ui.error_handling import handle_api_error, yfinance_circuit_breaker, option_chain_circuit_breaker
 
 
 def color_profit_loss(val):
@@ -72,7 +74,7 @@ def _extract_price_from_chain(chain_df, strike: float) -> Optional[float]:
     return None
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=Config.CACHE_TTL['option_chains'], show_spinner=False)
 def get_option_chain_for_ticker(ticker: str) -> Optional[Dict]:
     """Fetch option chain data from Yahoo Finance for a given ticker.
     
@@ -93,7 +95,7 @@ def get_option_chain_for_ticker(ticker: str) -> Optional[Dict]:
         return None
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=Config.CACHE_TTL['option_chains'], show_spinner=False)
 def get_option_chain(ticker: str, expiry: str) -> Optional[Dict[str, pd.DataFrame]]:
     """Fetch and cache the option chain (calls/puts) for a specific ticker and expiry.
 
@@ -113,7 +115,7 @@ def get_option_chain(ticker: str, expiry: str) -> Optional[Dict[str, pd.DataFram
         return None
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=Config.CACHE_TTL['option_chains'], show_spinner=False)
 def get_option_price(ticker: str, expiry: str, strike: float, option_type: str) -> Optional[float]:
     """Fetch current option price from a cached option chain.
 

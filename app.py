@@ -1,6 +1,9 @@
 import streamlit as st
 from collections.abc import Mapping
 from db.db_utils import load_platforms
+
+# Global connection pool for better performance
+CONNECTION_POOL = st.connection("postgresql", type="sql", ttl=3600)
 from ui.positions_ui import positions_ui
 from ui.option_trades_ui import option_trades_ui
 from ui.portfolio_report import portfolio_ui
@@ -69,23 +72,31 @@ def main():
         key="nav_radio"
     )
 
-    # Show spinner while loading new page content
-    with st.spinner("Loading page..."):
-        if page == "Dashboard":
+    # Lazy loading - only load page content when needed
+    # Use page-specific loading states for better UX
+    if page == "Dashboard":
+        with st.spinner("Loading dashboard..."):
             dashboard()
-        elif page == "Portfolio":
+    elif page == "Portfolio":
+        with st.spinner("Loading portfolio..."):
             portfolio_ui()
-        elif page == "Positions":
+    elif page == "Positions":
+        with st.spinner("Loading positions..."):
             positions_ui()
-        elif page == "Option Trades":
+    elif page == "Option Trades":
+        with st.spinner("Loading option trades..."):
             option_trades_ui()
-        elif page == "Weekly & Monthly P/L Report":
+    elif page == "Weekly & Monthly P/L Report":
+        with st.spinner("Loading P/L reports..."):
             weekly_monthly_pl_report_ui()
-        elif page == "Cash Flows":
+    elif page == "Cash Flows":
+        with st.spinner("Loading cash flows..."):
             cash_flows_ui()
-        elif page == "Taxes":
+    elif page == "Taxes":
+        with st.spinner("Loading tax data..."):
             taxes_ui()
-        elif page == "Data Entry":
+    elif page == "Data Entry":
+        with st.spinner("Loading data entry..."):
             data_entry()
 
 if __name__ == "__main__":

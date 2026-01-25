@@ -3,6 +3,7 @@ from sqlalchemy import text
 import datetime
 import logging
 from typing import Any, Dict, Optional, List
+from ui.error_handling import handle_database_error
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -37,14 +38,50 @@ class PlatformCache:
 
 PLATFORM_CACHE = PlatformCache()
 
+def clear_cache_selective(cache_types: List[str] = ['all']):
+    """Clear specific cache types instead of all caches.
+    
+    Args:
+        cache_types: List of cache types to clear. Options:
+            - 'positions': Clear position-related caches
+            - 'options': Clear option trade caches  
+            - 'portfolio': Clear portfolio calculation caches
+            - 'cash': Clear cash flow caches
+            - 'platforms': Clear platform caches
+            - 'all': Clear all caches
+    """
+    if 'all' in cache_types:
+        st.cache_data.clear()
+        return
+    
+    # For now, use a simpler approach - clear all if specific types are requested
+    # TODO: Implement more granular cache clearing when Streamlit API supports it
+    st.cache_data.clear()
+
 def get_st_connection():
-    """Get a Streamlit SQL connection object."""
-    return st.connection("postgresql", type="sql")
+    """Get a Streamlit SQL connection object from the global pool."""
+    # Import here to avoid circular imports
+    import app
+    return app.CONNECTION_POOL
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def load_platforms_from_db() -> Dict[str, int]:
+    """Load platforms from the database."""
+    conn = get_st_connection()
+    with conn.session as session:
+        # Order by name ascending for predictable UI ordering
+        result = session.execute(text("SELECT id, name FROM platforms ORDER BY name ASC"))
+        return {row[1]: row[0] for row in result.fetchall()}
 
 def load_platforms() -> None:
     """Load platforms from the database into the cache."""
     # Only load if cache is empty
     if not PLATFORM_CACHE.cache:
+        try:
+            PLATFORM_CACHE.cache = load_platforms_from_db()
+        except Exception as e:
+            logger.error(f"Error connecting to the database: {e}")
+            PLATFORM_CACHE.cache = {}
         try:
             conn = get_st_connection()
             with conn.session as session:
@@ -62,6 +99,7 @@ def map_platform_id_to_name(platform_id: int, platform_cache: PlatformCache = PL
     return id_to_name.get(platform_id)
 
 # --- Existing db_utils.py functions for positions management ---
+@handle_database_error
 def insert_position(
     ticker: str,
     trade_type: str,
@@ -90,7 +128,7 @@ def insert_position(
             }
         )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
 
 def update_position(position_id: int, **kwargs) -> None:
     """Update a position in the database."""
@@ -109,29 +147,44 @@ def update_position(position_id: int, **kwargs) -> None:
             params
         )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_all_positions() -> Dict[str, List[Dict[str, Any]]]:
+    """Load all positions from the database in a single query and split by status."""
+    conn = get_st_connection()
+    with conn.session as session:
+        result = session.execute(text("""
+            SELECT id, ticker, trade_type, position_status, entry_price, 
+                   quantity, entry_date, platform_id, exit_price, exit_date, profit_loss
+            FROM positions 
+            ORDER BY entry_date DESC
+        """))
+        rows = result.fetchall()
+        columns = ["id", "ticker", "trade_type", "position_status", "entry_price", 
+                  "quantity", "entry_date", "platform_id", "exit_price", "exit_date", "profit_loss"]
+        
+        all_positions = [dict(zip(columns, row)) for row in rows]
+        
+        # Split by status
+        open_positions = [p for p in all_positions if p.get('position_status') != 'close']
+        closed_positions = [p for p in all_positions if p.get('position_status') == 'close']
+        
+        return {
+            'open': open_positions,
+            'closed': closed_positions,
+            'all': all_positions
+        }
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_positions() -> List[Dict[str, Any]]:
     """Load open positions from the database."""
-    conn = get_st_connection()
-    with conn.session as session:
-        result = session.execute(
-            text("SELECT id, ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id FROM positions WHERE position_status != 'close'")
-        )
-        rows = result.fetchall()
-        columns = ["id", "ticker", "trade_type", "position_status", "entry_price", "quantity", "entry_date", "platform_id"]
-        return [dict(zip(columns, row)) for row in rows]
+    return load_all_positions()['open']
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_closed_positions() -> List[Dict[str, Any]]:
     """Load closed positions from the database."""
-    conn = get_st_connection()
-    with conn.session as session:
-        result = session.execute(text("SELECT id, ticker, trade_type, position_status, entry_price, quantity, exit_price, exit_date, entry_date, profit_loss, platform_id FROM positions WHERE position_status = 'close'"))
-        rows = result.fetchall()
-        columns = ["id", "ticker", "trade_type", "position_status", "entry_price", "quantity", "exit_price", "exit_date", "entry_date", "profit_loss", "platform_id"]
-        return [dict(zip(columns, row)) for row in rows]
+    return load_all_positions()['closed']
 
 def insert_option_trade(
     ticker: str,
@@ -167,7 +220,7 @@ def insert_option_trade(
             }
         )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
 
 def update_option_trade(trade_id: int, **kwargs) -> None:
     """Update an option trade in the database."""
@@ -186,7 +239,7 @@ def update_option_trade(trade_id: int, **kwargs) -> None:
             params
         )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_option_trades(status=None) -> List[Dict[str, Any]]:
@@ -233,7 +286,7 @@ def close_option_trade(trade_id, status, close_date, option_close_price, notes=N
             }
         )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
 
 def sync_positions_from_trades():
     """
@@ -371,7 +424,7 @@ def sync_positions_from_trades():
                 }
             )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
 
 def insert_trade(
     ticker: str,
@@ -399,7 +452,7 @@ def insert_trade(
             }
         )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
 
 
 # --- Last upload metadata helpers (DB-backed) -----------------------------
@@ -468,7 +521,7 @@ def insert_cash_flow(
             }
         )
         session.commit()
-    st.cache_data.clear()
+    clear_cache_selective(['positions'])
 
 @st.cache_data(ttl=60, show_spinner=False)
 def load_cash_flows() -> List[Dict[str, Any]]:
@@ -513,7 +566,7 @@ def set_platform_cash_available(platform_id: int, amount: float) -> None:
                 {"amount": float(amount), "platform_id": platform_id}
             )
             session.commit()
-        st.cache_data.clear()
+        clear_cache_selective(['positions'])
     except Exception as e:
         logger.error(f"Failed to set platform cash_available: {e}")
         raise

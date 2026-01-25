@@ -8,7 +8,23 @@ import pandas as pd
 import yfinance as yf
 from db.db_utils import PLATFORM_CACHE, load_option_trades, get_total_cash_by_platform, get_platform_cash_available_map
 from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_batch_option_prices, get_platform_option_exposure, get_options_cost_basis, get_options_portfolio_value
-from typing import Dict
+from typing import Dict, Tuple, List
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_dashboard_data() -> Tuple[Dict, pd.DataFrame, List[Dict], Dict[str, float], Dict[str, float]]:
+    """Batch load all dashboard data to minimize database queries."""
+    # Load all data in parallel
+    portfolio_df = _get_portfolio_df()
+    open_opts = load_option_trades(status="open")
+    deposits_by_platform = get_total_cash_by_platform()
+    platform_cash_map = get_platform_cash_available_map()
+    
+    return {
+        'portfolio_df': portfolio_df,
+        'open_opts': open_opts,
+        'deposits_by_platform': deposits_by_platform,
+        'platform_cash_map': platform_cash_map
+    }, portfolio_df, open_opts, deposits_by_platform, platform_cash_map
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _classify_ticker(ticker: str) -> str:
@@ -219,11 +235,11 @@ def get_total_investment_for_cashflow() -> pd.DataFrame:
 def dashboard():
     st.header("📊 Dashboard")
 
-    # --- Cash Summary by Platform with Total Investment and ROI ---
-    with st.spinner("Loading cash summary..."):
-        st.subheader("💵 Summary by Platform")
-        deposits_by_platform = get_total_cash_by_platform()  # deposits - withdrawals
-        platform_cash_map = get_platform_cash_available_map()  # explicit per-platform cash available (true account value)
+    # Load all dashboard data in one batch
+    with st.spinner("Loading dashboard data..."):
+        dashboard_batch_data, portfolio_df, open_opts, deposits_by_platform, platform_cash_map = load_dashboard_data()
+        
+    st.subheader("💵 Summary by Platform")
 
         # Build list of all platforms from both sources, stable sort
         all_platforms = sorted(set(list(deposits_by_platform.keys()) + list(platform_cash_map.keys())))
