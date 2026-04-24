@@ -41,7 +41,7 @@ def upload_csv() -> None:
                 if not rows:
                     st.warning("No valid rows found in the uploaded file.")
                     return
-                for row in rows:
+                for row in reversed(rows):
                     columns = list(row.keys())
                     placeholders = ", ".join([f":{col}" for col in columns])
                     sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
