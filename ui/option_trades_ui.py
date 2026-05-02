@@ -273,18 +273,6 @@ def option_trades_ui() -> None:
             pnl_cols_st = ['Total P/L', 'Avg P/L']
             styled_st = strat_ticker_agg.style.map(color_profit_loss, subset=pnl_cols_st)
             st.dataframe(styled_st, width="stretch", hide_index=True)
-
-            # ── Bar chart: P&L by Strategy ───────────────────────────────
-            chart_strat = alt.Chart(strategy_agg).mark_bar().encode(
-                x=alt.X('Strategy:N', title='Strategy'),
-                y=alt.Y('Total P/L:Q', title='Total P/L'),
-                color=alt.condition(
-                    alt.datum['Total P/L'] > 0,
-                    alt.value('#2ecc71'),  # green for profit
-                    alt.value('#e74c3c')   # red for loss
-                )
-            ).properties(title='Total P/L by Strategy')
-            st.altair_chart(chart_strat, use_container_width=True)
         else:
             st.info("No closed option trades found for aggregate summary.")
 
