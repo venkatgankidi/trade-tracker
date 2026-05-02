@@ -265,11 +265,11 @@ def option_trades_ui() -> None:
                 Avg_PnL=('profit_loss', 'mean'),
                 Win_Rate=('profit_loss', lambda x: round((x > 0).sum() / len(x) * 100, 1) if len(x) > 0 else 0),
             ).reset_index()
-            strat_ticker_agg.columns = ['Strategy', 'Ticker', 'Trades', 'Total P/L', 'Avg P/L', 'Win Rate (%)']
+            strat_ticker_agg.columns = ['Ticker', 'Strategy','Trades', 'Total P/L', 'Avg P/L', 'Win Rate (%)']
             strat_ticker_agg['Total P/L'] = strat_ticker_agg['Total P/L'].round(2)
             strat_ticker_agg['Avg P/L'] = strat_ticker_agg['Avg P/L'].round(2)
-            # Sort by Strategy, then Total P/L descending
-            strat_ticker_agg = strat_ticker_agg.sort_values(['Strategy', 'Total P/L'], ascending=[True, False])
+            # Sort by Ticker, then Strategy 
+            strat_ticker_agg = strat_ticker_agg.sort_values(['Ticker', 'Strategy'], ascending=[True, True])
             pnl_cols_st = ['Total P/L', 'Avg P/L']
             styled_st = strat_ticker_agg.style.map(color_profit_loss, subset=pnl_cols_st)
             st.dataframe(styled_st, width="stretch", hide_index=True)
