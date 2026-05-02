@@ -234,6 +234,60 @@ def option_trades_ui() -> None:
         else:
             st.info("No closed option trades.")
 
+        # ── Aggregate P&L Summary (Closed Trades Only) ──────────────────
+        st.header("📊 Aggregate P&L Summary (Closed Trades)")
+
+        # Use the closed_trades list already loaded above
+        if closed_trades:
+            df_agg = pd.DataFrame(closed_trades)
+            df_agg['profit_loss'] = pd.to_numeric(df_agg.get('profit_loss'), errors='coerce').fillna(0)
+
+            # ── Table 1: P&L by Strategy ──────────────────────────────────
+            st.subheader("P&L by Strategy")
+            strategy_agg = df_agg.groupby('strategy').agg(
+                Trades=('profit_loss', 'count'),
+                Total_PnL=('profit_loss', 'sum'),
+                Avg_PnL=('profit_loss', 'mean'),
+                Win_Rate=('profit_loss', lambda x: round((x > 0).sum() / len(x) * 100, 1) if len(x) > 0 else 0),
+            ).reset_index()
+            strategy_agg.columns = ['Strategy', 'Trades', 'Total P/L', 'Avg P/L', 'Win Rate (%)']
+            strategy_agg['Total P/L'] = strategy_agg['Total P/L'].round(2)
+            strategy_agg['Avg P/L'] = strategy_agg['Avg P/L'].round(2)
+            pnl_cols_strat = ['Total P/L', 'Avg P/L']
+            styled_strat = strategy_agg.style.map(color_profit_loss, subset=pnl_cols_strat)
+            st.dataframe(styled_strat, width="stretch", hide_index=True)
+
+            # ── Table 2: P&L by Strategy & Ticker ────────────────────────
+            st.subheader("P&L by Strategy & Ticker")
+            strat_ticker_agg = df_agg.groupby(['strategy', 'ticker']).agg(
+                Trades=('profit_loss', 'count'),
+                Total_PnL=('profit_loss', 'sum'),
+                Avg_PnL=('profit_loss', 'mean'),
+                Win_Rate=('profit_loss', lambda x: round((x > 0).sum() / len(x) * 100, 1) if len(x) > 0 else 0),
+            ).reset_index()
+            strat_ticker_agg.columns = ['Strategy', 'Ticker', 'Trades', 'Total P/L', 'Avg P/L', 'Win Rate (%)']
+            strat_ticker_agg['Total P/L'] = strat_ticker_agg['Total P/L'].round(2)
+            strat_ticker_agg['Avg P/L'] = strat_ticker_agg['Avg P/L'].round(2)
+            # Sort by Strategy, then Total P/L descending
+            strat_ticker_agg = strat_ticker_agg.sort_values(['Strategy', 'Total P/L'], ascending=[True, False])
+            pnl_cols_st = ['Total P/L', 'Avg P/L']
+            styled_st = strat_ticker_agg.style.map(color_profit_loss, subset=pnl_cols_st)
+            st.dataframe(styled_st, width="stretch", hide_index=True)
+
+            # ── Bar chart: P&L by Strategy ───────────────────────────────
+            chart_strat = alt.Chart(strategy_agg).mark_bar().encode(
+                x=alt.X('Strategy:N', title='Strategy'),
+                y=alt.Y('Total P/L:Q', title='Total P/L'),
+                color=alt.condition(
+                    alt.datum['Total P/L'] > 0,
+                    alt.value('#2ecc71'),  # green for profit
+                    alt.value('#e74c3c')   # red for loss
+                )
+            ).properties(title='Total P/L by Strategy')
+            st.altair_chart(chart_strat, use_container_width=True)
+        else:
+            st.info("No closed option trades found for aggregate summary.")
+
 def option_trades_data_entry():
     """
     Streamlit UI for adding new option trades only (for Data Entry screen).
