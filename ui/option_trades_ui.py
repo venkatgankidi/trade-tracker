@@ -259,7 +259,7 @@ def option_trades_ui() -> None:
 
             # ── Table 2: P&L by Strategy & Ticker ────────────────────────
             st.subheader("P&L by Strategy & Ticker")
-            strat_ticker_agg = df_agg.groupby(['strategy', 'ticker']).agg(
+            strat_ticker_agg = df_agg.groupby(['ticker', 'strategy']).agg(
                 Trades=('profit_loss', 'count'),
                 Total_PnL=('profit_loss', 'sum'),
                 Avg_PnL=('profit_loss', 'mean'),
