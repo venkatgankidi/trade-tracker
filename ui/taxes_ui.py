@@ -48,8 +48,8 @@ def aggregate_gains():
             gain = (entry_price - exit_price) * quantity
         else:
             gain = (exit_price - entry_price) * quantity
-        term = "🔼 Long Term" if holding_period > LONG_TERM_DAYS else "🔻 Short Term"
-        tax_rate = LONG_TERM_TAX_RATE if "🔼 Long" in term else SHORT_TERM_TAX_RATE
+        term = "Long Term" if holding_period > LONG_TERM_DAYS else "Short Term"
+        tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
         yearly.setdefault(year, {"gain": 0, "tax": 0})
         yearly[year]["gain"] += gain
         yearly[year]["tax"] += gain * tax_rate
@@ -68,8 +68,8 @@ def aggregate_gains():
             continue
         year = close_date.year
         holding_period = (close_date - trade_date).days
-        term = "🔼 Long Term" if holding_period > LONG_TERM_DAYS else "🔻 Short Term"
-        tax_rate = LONG_TERM_TAX_RATE if "🔼 Long" in term else SHORT_TERM_TAX_RATE
+        term = "Long Term" if holding_period > LONG_TERM_DAYS else "Short Term"
+        tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
         yearly.setdefault(year, {"gain": 0, "tax": 0})
         yearly[year]["gain"] += profit_loss
         yearly[year]["tax"] += profit_loss * tax_rate
@@ -122,7 +122,7 @@ def taxes_ui() -> None:
         for breakdown_key in sorted(yearly_breakdown):
             year, asset, term = breakdown_key
             gain = yearly_breakdown[breakdown_key]
-            tax_rate = 0.15 if "🔼 Long" in term else 0.24
+            tax_rate = 0.15 if term == "Long Term" else 0.24
             tax = gain * tax_rate
             rows.append({
                 "Tax Year": year,

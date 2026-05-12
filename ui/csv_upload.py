@@ -12,17 +12,7 @@ def upload_csv() -> None:
     """
     platform_type: str = st.selectbox("Select Platform Type", list(PLATFORM_CACHE.keys()))
     
-    col1, col2 = st.columns(2)
-    with col1:
-        uploaded_file = st.file_uploader("Choose a file", type=["csv"])
-    with col2:
-        direction_override = st.selectbox(
-            "Default Direction", 
-            ["🔼 Long", "🔻 Short"], 
-            index=0, 
-            help="Default direction for all trades in this file. 'Long' for normal buys, 'Short' for short selling."
-        )
-
+    uploaded_file = st.file_uploader("Choose a file", type=["csv"])
     if uploaded_file:
         # Read uploaded bytes directly without writing to a temp file
         content = uploaded_file.read()
@@ -47,13 +37,7 @@ def upload_csv() -> None:
                     # Validate required fields
                     if not mapped_row.get("ticker") or not mapped_row.get("date"):
                         continue
-                    
                     mapped_row["platform_id"] = mapped_row.get("platform_id") if platform_type == "OTHER" else PLATFORM_CACHE.get(platform_type)
-                    
-                    # Apply direction override if direction is not in CSV or is empty
-                    if "direction" not in mapped_row or not mapped_row["direction"]:
-                        mapped_row["direction"] = direction_override.replace("🔼 ", "").replace("🔻 ", "")
-                        
                     rows.append(mapped_row)
                 if not rows:
                     st.warning("No valid rows found in the uploaded file.")
