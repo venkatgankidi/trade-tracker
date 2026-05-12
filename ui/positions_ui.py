@@ -27,8 +27,8 @@ def get_positions_summary() -> pd.DataFrame:
     long_open = sum(1 for p in open_positions if (p.get("direction") or "Long") == "Long")
     short_open = sum(1 for p in open_positions if (p.get("direction") or "Long") == "Short")
     return pd.DataFrame([{
-        "Open Positions (Long)": long_open,
-        "Open Positions (Short)": short_open,
+        "Open Positions (🔼 Long)": long_open,
+        "Open Positions (🔻 Short)": short_open,
         "Closed Positions": len(closed_positions),
         "Total P/L (Closed)": round(total_pnl, 2)
     }])
@@ -38,7 +38,7 @@ def _render_open_positions_for_direction(platform_df: pd.DataFrame, direction: s
     dir_df = platform_df[platform_df["direction"] == direction]
     if dir_df.empty:
         return
-    label = "🔼 Long" if direction == "Long" else "🩳 Short"
+    label = "🔼 Long" if direction == "Long" else "🔻 Short"
     bar_color = "#59a14f" if direction == "Long" else "#e15759"
     st.markdown(f"**{label} Positions**")
     summary = (
@@ -97,11 +97,11 @@ def positions_ui() -> None:
                 has_long = not platform_df[platform_df["direction"] == "Long"].empty
                 has_short = not platform_df[platform_df["direction"] == "Short"].empty
                 if has_long and has_short:
-                    icon = "📈🩳"
+                    icon = "🔼🔻"
                 elif has_short:
-                    icon = "🩳"
+                    icon = "🔻"
                 else:
-                    icon = "📈"
+                    icon = "🔼"
                 with st.expander(f"{platform} - Open Positions {icon}", expanded=False):
                     _render_open_positions_for_direction(platform_df, "Long")
                     _render_open_positions_for_direction(platform_df, "Short")
@@ -135,7 +135,7 @@ def positions_ui() -> None:
                     )
                     # Human-readable direction badge
                     summary_closed["Direction"] = summary_closed["direction"].apply(
-                        lambda d: "🔼 Long" if d == "Long" else "🩳 Short"
+                        lambda d: "🔼 Long" if d == "Long" else "🔻 Short"
                     )
                     summary_closed = summary_closed[[
                         "ticker", "Direction", "Avg Entry Price", "Quantity", "Avg Exit Price", "Profit/Loss"
@@ -152,7 +152,7 @@ def positions_ui() -> None:
                         x=alt.X('ticker:N', title='Ticker'),
                         y=alt.Y('Profit/Loss:Q', title='Total Profit/Loss'),
                         color=alt.Color('Direction:N', scale=alt.Scale(
-                            domain=["🔼 Long", "🩳 Short"],
+                            domain=["🔼 Long", "🔻 Short"],
                             range=["#59a14f", "#e15759"]
                         )),
                         tooltip=['ticker:N', 'Direction:N', 'Profit/Loss:Q']

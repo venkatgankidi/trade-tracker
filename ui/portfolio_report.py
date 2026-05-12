@@ -176,7 +176,7 @@ def portfolio_ui() -> None:
                         st.dataframe(long_df, width="stretch", hide_index=True)
                 
                 if not short_df.empty:
-                    st.markdown("##### 🩳 Short Positions")
+                    st.markdown("##### 🔻 Short Positions")
                     short_df = short_df.sort_values("ticker")
                     short_df = short_df.drop(columns=["platform", "direction"], errors='ignore')
                     if "percent_profit_loss" in short_df.columns:

@@ -18,7 +18,7 @@ def upload_csv() -> None:
     with col2:
         direction_override = st.selectbox(
             "Default Direction", 
-            ["Long", "Short"], 
+            ["🔼 Long", "🔻 Short"], 
             index=0, 
             help="Default direction for all trades in this file. 'Long' for normal buys, 'Short' for short selling."
         )
@@ -52,7 +52,7 @@ def upload_csv() -> None:
                     
                     # Apply direction override if direction is not in CSV or is empty
                     if "direction" not in mapped_row or not mapped_row["direction"]:
-                        mapped_row["direction"] = direction_override
+                        mapped_row["direction"] = direction_override.replace("🔼 ", "").replace("🔻 ", "")
                         
                     rows.append(mapped_row)
                 if not rows:
