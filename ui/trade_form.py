@@ -11,6 +11,7 @@ defaults = {
     "quantity": 0.0,
     "date": None,
     "trade_type": "Buy",
+    "direction": "Long",
 }
 
 def trade_form() -> None:
@@ -36,6 +37,14 @@ def trade_form() -> None:
         quantity: float = st.number_input("Quantity", min_value=0.0, format="%.5f", key="quantity")
         date = st.date_input("Date", key="date")
         trade_type: str = st.selectbox("Trade Type", ["Buy", "Sell"], index=["Buy", "Sell"].index(st.session_state["trade_type"]) if st.session_state["trade_type"] in ["Buy", "Sell"] else 0, key="trade_type")
+        direction: str = st.radio(
+            "Direction",
+            ["Long", "Short"],
+            index=["Long", "Short"].index(st.session_state["direction"]) if st.session_state.get("direction") in ["Long", "Short"] else 0,
+            horizontal=True,
+            key="direction",
+            help="Long = buy to own shares. Short = borrow and sell shares expecting price to fall."
+        )
         submit_button = st.form_submit_button("Submit Trade")
         error_msgs = []
         if submit_button:
@@ -57,6 +66,7 @@ def trade_form() -> None:
                 "quantity": quantity,
                 "date": date,
                 "trade_type": trade_type,
+                "direction": direction,
             }
             try:
                 conn = st.connection("postgresql", type="sql")

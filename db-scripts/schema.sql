@@ -17,7 +17,8 @@ CREATE TABLE trades (
     price NUMERIC(10, 2) NOT NULL,
     quantity NUMERIC(10,5) NOT NULL,
     date DATE NOT NULL,
-    trade_type VARCHAR(10) NOT NULL
+    trade_type VARCHAR(10) NOT NULL,
+    direction VARCHAR(5) NOT NULL DEFAULT 'Long'  -- 'Long' or 'Short'
 );
 
 -- POSITIONS TABLE
@@ -32,7 +33,8 @@ CREATE TABLE IF NOT EXISTS positions (
     exit_date DATE DEFAULT NULL,
     entry_date DATE DEFAULT CURRENT_DATE,
     profit_loss REAL,
-    platform_id INTEGER REFERENCES platforms(id)
+    platform_id INTEGER REFERENCES platforms(id),
+    direction VARCHAR(5) DEFAULT 'Long'  -- 'Long' or 'Short'
 );
 
 -- OPTION TRADES TABLE

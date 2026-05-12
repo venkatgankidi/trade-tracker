@@ -52,7 +52,7 @@ def _get_portfolio_df() -> pd.DataFrame:
     platform_map = get_platform_id_to_name_map()
     df["platform"] = df["platform_id"].map(platform_map)
     summary = (
-        df.groupby(["platform", "ticker"])
+        df.groupby(["platform", "ticker", "direction"])
         .apply(lambda g: pd.Series({
             "total_quantity": g["quantity"].sum(),
             "average_price": (g["entry_price"] * g["quantity"]).sum() / g["quantity"].sum() if g["quantity"].sum() else 0,
@@ -63,8 +63,20 @@ def _get_portfolio_df() -> pd.DataFrame:
     unique_tickers = summary["ticker"].unique().tolist()
     ticker_price_map = _get_ticker_prices(unique_tickers)
     summary["current_price"] = summary["ticker"].map(ticker_price_map)
-    summary["current_value"] = summary["current_price"] * summary["total_quantity"]
-    summary["unrealized_gain"] = summary["current_value"] - summary["trade_cost"]
+    
+    # Calculate values based on direction
+    def calc_current_val(row):
+        val = row["current_price"] * row["total_quantity"]
+        return -val if row.get("direction") == "Short" else val
+        
+    def calc_unrealized(row):
+        if row.get("direction") == "Short":
+            return row["trade_cost"] - (row["current_price"] * row["total_quantity"])
+        return row["current_value"] - row["trade_cost"]
+
+    summary["current_value"] = summary.apply(calc_current_val, axis=1)
+    summary["unrealized_gain"] = summary.apply(calc_unrealized, axis=1)
+    
     # Avoid division by zero and keep numeric conversions vectorized
     summary["percent_profit_loss"] = summary.apply(
         lambda r: (r["unrealized_gain"] / r["trade_cost"] * 100) if r["trade_cost"] else 0.0, axis=1
@@ -145,20 +157,39 @@ def portfolio_ui() -> None:
         if not portfolio_df.empty:
             for platform, group_df in portfolio_df.groupby("platform"):
                 st.write(f"**Platform:** {platform}")
-                display_df = group_df.copy()
-                display_df = display_df.sort_values("ticker")
-                display_df = display_df.drop(columns=["platform"], errors='ignore')
-                if "percent_profit_loss" in display_df.columns:
-                    display_df["percent_profit_loss"] = display_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
-                highlight_cols = [col for col in display_df.columns if col.lower() in [ "percent_profit_loss", "unrealized_gain"]]
-                if highlight_cols:
-                    styled_df = display_df.style.map(color_profit_loss, subset=highlight_cols)
-                    st.dataframe(styled_df, width="stretch", hide_index=True)
-                else:
-                    st.dataframe(display_df, width="stretch", hide_index=True)
+                
+                # Separate Long and Short
+                long_df = group_df[group_df["direction"] == "Long"].copy()
+                short_df = group_df[group_df["direction"] == "Short"].copy()
+                
+                if not long_df.empty:
+                    st.markdown("##### 🔼 Long Positions")
+                    long_df = long_df.sort_values("ticker")
+                    long_df = long_df.drop(columns=["platform", "direction"], errors='ignore')
+                    if "percent_profit_loss" in long_df.columns:
+                        long_df["percent_profit_loss"] = long_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
+                    highlight_cols = [col for col in long_df.columns if col.lower() in [ "percent_profit_loss", "unrealized_gain"]]
+                    if highlight_cols:
+                        styled_df = long_df.style.map(color_profit_loss, subset=highlight_cols)
+                        st.dataframe(styled_df, width="stretch", hide_index=True)
+                    else:
+                        st.dataframe(long_df, width="stretch", hide_index=True)
+                
+                if not short_df.empty:
+                    st.markdown("##### 🩳 Short Positions")
+                    short_df = short_df.sort_values("ticker")
+                    short_df = short_df.drop(columns=["platform", "direction"], errors='ignore')
+                    if "percent_profit_loss" in short_df.columns:
+                        short_df["percent_profit_loss"] = short_df["percent_profit_loss"].apply(lambda x: f"{x:.2f}%" if pd.notna(x) else "")
+                    highlight_cols = [col for col in short_df.columns if col.lower() in [ "percent_profit_loss", "unrealized_gain"]]
+                    if highlight_cols:
+                        styled_df = short_df.style.map(color_profit_loss, subset=highlight_cols)
+                        st.dataframe(styled_df, width="stretch", hide_index=True)
+                    else:
+                        st.dataframe(short_df, width="stretch", hide_index=True)
                 # Change portfolio holdings chart to plot trade cost, current value, and profit/loss per ticker in a line graph
-                if 'ticker' in display_df.columns and 'trade_cost' in display_df.columns and 'current_value' in display_df.columns and 'unrealized_gain' in display_df.columns:
-                    melted = display_df.melt(id_vars=['ticker'], value_vars=['trade_cost', 'current_value', 'unrealized_gain'], var_name='Metric', value_name='Value')
+                if 'ticker' in group_df.columns and 'trade_cost' in group_df.columns and 'current_value' in group_df.columns and 'unrealized_gain' in group_df.columns:
+                    melted = group_df.melt(id_vars=['ticker'], value_vars=['trade_cost', 'current_value', 'unrealized_gain'], var_name='Metric', value_name='Value')
                     chart = alt.Chart(melted).mark_line(point=True).encode(
                         x=alt.X('ticker:N', title='Ticker'),
                         y=alt.Y('Value:Q', title='Amount'),

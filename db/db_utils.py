@@ -107,15 +107,16 @@ def insert_position(
     entry_price: float,
     quantity: float,
     entry_date: Any,
-    platform_id: Optional[int] = None
+    platform_id: Optional[int] = None,
+    direction: str = "Long"
 ) -> None:
     """Insert a new position into the database."""
     conn = get_st_connection()
     with conn.session as session:
         session.execute(
             text("""
-            INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id)
-            VALUES (:ticker, :trade_type, :position_status, :entry_price, :quantity, :entry_date, :platform_id)
+            INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id, direction)
+            VALUES (:ticker, :trade_type, :position_status, :entry_price, :quantity, :entry_date, :platform_id, :direction)
             """),
             {
                 "ticker": ticker,
@@ -125,6 +126,7 @@ def insert_position(
                 "quantity": quantity,
                 "entry_date": entry_date,
                 "platform_id": platform_id,
+                "direction": direction,
             }
         )
         session.commit()
@@ -156,13 +158,13 @@ def load_all_positions() -> Dict[str, List[Dict[str, Any]]]:
     with conn.session as session:
         result = session.execute(text("""
             SELECT id, ticker, trade_type, position_status, entry_price, 
-                   quantity, entry_date, platform_id, exit_price, exit_date, profit_loss
+                   quantity, entry_date, platform_id, exit_price, exit_date, profit_loss, direction
             FROM positions 
             ORDER BY entry_date DESC
         """))
         rows = result.fetchall()
         columns = ["id", "ticker", "trade_type", "position_status", "entry_price", 
-                  "quantity", "entry_date", "platform_id", "exit_price", "exit_date", "profit_loss"]
+                  "quantity", "entry_date", "platform_id", "exit_price", "exit_date", "profit_loss", "direction"]
         
         all_positions = [dict(zip(columns, row)) for row in rows]
         
@@ -303,7 +305,7 @@ def sync_positions_from_trades():
         # ensures chronological ordering where date is primary and id preserves
         # insertion order for same-day events.
         result = session.execute(text('''
-            SELECT id, ticker, platform_id, price, quantity, date, trade_type
+            SELECT id, ticker, platform_id, price, quantity, date, trade_type, direction
             FROM trades
             ORDER BY ticker, platform_id, date, id
         '''))
@@ -311,8 +313,8 @@ def sync_positions_from_trades():
         from collections import defaultdict, deque
         trades_by_key = defaultdict(list)
         for row in trades:
-            # row layout: id, ticker, platform_id, price, quantity, date, trade_type
-            _id, ticker, platform_id, price, quantity, date, trade_type = row
+            # row layout: id, ticker, platform_id, price, quantity, date, trade_type, direction
+            _id, ticker, platform_id, price, quantity, date, trade_type, direction = row
             # Normalize values: ensure numeric types, normalized trade_type and skip zero qty
             try:
                 qty = round(float(quantity), 6)
@@ -322,12 +324,14 @@ def sync_positions_from_trades():
                 # skip no-op trades
                 continue
             ttype = (str(trade_type) if trade_type is not None else "").strip().lower()
+            tdir = (str(direction) if direction is not None else "Long").strip().capitalize()
             trades_by_key[(ticker, platform_id)].append({
                 'id': _id,
                 'price': float(price) if price is not None else 0.0,
                 'quantity': qty,
                 'date': date,
-                'trade_type': ttype
+                'trade_type': ttype,
+                'direction': tdir,
             })
         # Prepare batch inserts and minimal deletions
         all_keys = list(trades_by_key.keys())
@@ -337,41 +341,86 @@ def sync_positions_from_trades():
         closed_positions = []
         open_positions = []
         for (ticker, platform_id), trade_list in trades_by_key.items():
-            open_lots = deque()
+            open_lots = deque()       # Long open lots
+            short_lots = deque()      # Short open lots
             for trade in trade_list:
-                if trade['trade_type'].lower() == 'buy':
-                    open_lots.append({
-                        'price': trade['price'],
-                        'quantity': trade['quantity'],
-                        'entry_date': trade['date'],
-                        'remaining': round(trade['quantity'], 6)  # Round to 6 decimal places
-                    })
-                elif trade['trade_type'].lower() == 'sell':
-                    sell_qty = round(trade['quantity'], 6)  # Round to 6 decimal places
-                    sell_price = trade['price']
-                    sell_date = trade['date']
-                    while round(sell_qty, 6) > 0 and open_lots:  # Round comparison to 6 decimal places
-                        lot = open_lots[0]
-                        lot_qty = round(lot['remaining'], 6)  # Round to 6 decimal places
-                        matched_qty = round(min(lot_qty, sell_qty), 6)  # Round to 6 decimal places
-                        profit_loss = round((sell_price - lot['price']) * matched_qty, 2)  # Round profit/loss to 2 decimal places
-                        closed_positions.append({
-                            'ticker': ticker,
-                            'trade_type': None,
-                            'position_status': 'close',
-                            'entry_price': lot['price'],
-                            'quantity': matched_qty,
-                            'entry_date': lot['entry_date'],
-                            'exit_price': sell_price,
-                            'exit_date': sell_date,
-                            'platform_id': platform_id,
-                            'profit_loss': profit_loss
+                ttype = trade['trade_type'].lower()
+                tdir = trade.get('direction', 'Long')
+
+                if tdir == 'Short':
+                    # SHORT position logic:
+                    # "Sell" (sell-to-open) opens a short lot
+                    # "Buy" (buy-to-cover) closes short lots
+                    if ttype == 'sell':
+                        short_lots.append({
+                            'price': trade['price'],
+                            'quantity': trade['quantity'],
+                            'entry_date': trade['date'],
+                            'remaining': round(trade['quantity'], 6)
                         })
-                        lot['remaining'] = round(lot['remaining'] - matched_qty, 6)  # Round to 6 decimal places
-                        sell_qty = round(sell_qty - matched_qty, 6)  # Round to 6 decimal places
-                        if abs(lot['remaining']) < 1e-6:  # Compare with small epsilon instead of exact 0
-                            open_lots.popleft()
-            # After all trades, any open_lots are open positions
+                    elif ttype == 'buy':
+                        cover_qty = round(trade['quantity'], 6)
+                        cover_price = trade['price']
+                        cover_date = trade['date']
+                        while round(cover_qty, 6) > 0 and short_lots:
+                            lot = short_lots[0]
+                            lot_qty = round(lot['remaining'], 6)
+                            matched_qty = round(min(lot_qty, cover_qty), 6)
+                            # Short P&L: entry (sell) price - exit (buy/cover) price
+                            profit_loss = round((lot['price'] - cover_price) * matched_qty, 2)
+                            closed_positions.append({
+                                'ticker': ticker,
+                                'trade_type': None,
+                                'position_status': 'close',
+                                'entry_price': lot['price'],
+                                'quantity': matched_qty,
+                                'entry_date': lot['entry_date'],
+                                'exit_price': cover_price,
+                                'exit_date': cover_date,
+                                'platform_id': platform_id,
+                                'profit_loss': profit_loss,
+                                'direction': 'Short',
+                            })
+                            lot['remaining'] = round(lot['remaining'] - matched_qty, 6)
+                            cover_qty = round(cover_qty - matched_qty, 6)
+                            if abs(lot['remaining']) < 1e-6:
+                                short_lots.popleft()
+                else:
+                    # LONG position logic (original)
+                    if ttype == 'buy':
+                        open_lots.append({
+                            'price': trade['price'],
+                            'quantity': trade['quantity'],
+                            'entry_date': trade['date'],
+                            'remaining': round(trade['quantity'], 6)
+                        })
+                    elif ttype == 'sell':
+                        sell_qty = round(trade['quantity'], 6)
+                        sell_price = trade['price']
+                        sell_date = trade['date']
+                        while round(sell_qty, 6) > 0 and open_lots:
+                            lot = open_lots[0]
+                            lot_qty = round(lot['remaining'], 6)
+                            matched_qty = round(min(lot_qty, sell_qty), 6)
+                            profit_loss = round((sell_price - lot['price']) * matched_qty, 2)
+                            closed_positions.append({
+                                'ticker': ticker,
+                                'trade_type': None,
+                                'position_status': 'close',
+                                'entry_price': lot['price'],
+                                'quantity': matched_qty,
+                                'entry_date': lot['entry_date'],
+                                'exit_price': sell_price,
+                                'exit_date': sell_date,
+                                'platform_id': platform_id,
+                                'profit_loss': profit_loss,
+                                'direction': 'Long',
+                            })
+                            lot['remaining'] = round(lot['remaining'] - matched_qty, 6)
+                            sell_qty = round(sell_qty - matched_qty, 6)
+                            if abs(lot['remaining']) < 1e-6:
+                                open_lots.popleft()
+            # After all trades, remaining open_lots = open long positions
             for lot in open_lots:
                 open_positions.append({
                     'ticker': ticker,
@@ -381,15 +430,29 @@ def sync_positions_from_trades():
                     'quantity': lot['remaining'],
                     'entry_date': lot['entry_date'],
                     'platform_id': platform_id,
-                    'profit_loss': None
+                    'profit_loss': None,
+                    'direction': 'Long',
+                })
+            # Remaining short_lots = open short positions
+            for lot in short_lots:
+                open_positions.append({
+                    'ticker': ticker,
+                    'trade_type': None,
+                    'position_status': 'open',
+                    'entry_price': lot['price'],
+                    'quantity': lot['remaining'],
+                    'entry_date': lot['entry_date'],
+                    'platform_id': platform_id,
+                    'profit_loss': None,
+                    'direction': 'Short',
                 })
         # Batch insert closed positions
         if closed_positions:
             session.execute(text('''
-                INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, exit_price, exit_date, platform_id, profit_loss)
+                INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, exit_price, exit_date, platform_id, profit_loss, direction)
                 VALUES 
                 ''' + ',\n'.join([
-                    f"(:ticker{i}, :trade_type{i}, :position_status{i}, :entry_price{i}, :quantity{i}, :entry_date{i}, :exit_price{i}, :exit_date{i}, :platform_id{i}, :profit_loss{i})"
+                    f"(:ticker{i}, :trade_type{i}, :position_status{i}, :entry_price{i}, :quantity{i}, :entry_date{i}, :exit_price{i}, :exit_date{i}, :platform_id{i}, :profit_loss{i}, :direction{i})"
                     for i in range(len(closed_positions))
                 ])), {
                     **{f"ticker{i}": p['ticker'] for i, p in enumerate(closed_positions)},
@@ -402,15 +465,16 @@ def sync_positions_from_trades():
                     **{f"exit_date{i}": p['exit_date'] for i, p in enumerate(closed_positions)},
                     **{f"platform_id{i}": p['platform_id'] for i, p in enumerate(closed_positions)},
                     **{f"profit_loss{i}": p['profit_loss'] for i, p in enumerate(closed_positions)},
+                    **{f"direction{i}": p.get('direction', 'Long') for i, p in enumerate(closed_positions)},
                 }
             )
         # Batch insert open positions
         if open_positions:
             session.execute(text('''
-                INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id, profit_loss)
+                INSERT INTO positions (ticker, trade_type, position_status, entry_price, quantity, entry_date, platform_id, profit_loss, direction)
                 VALUES 
                 ''' + ',\n'.join([
-                    f"(:ticker{i}, :trade_type{i}, :position_status{i}, :entry_price{i}, :quantity{i}, :entry_date{i}, :platform_id{i}, :profit_loss{i})"
+                    f"(:ticker{i}, :trade_type{i}, :position_status{i}, :entry_price{i}, :quantity{i}, :entry_date{i}, :platform_id{i}, :profit_loss{i}, :direction{i})"
                     for i in range(len(open_positions))
                 ])), {
                     **{f"ticker{i}": p['ticker'] for i, p in enumerate(open_positions)},
@@ -421,6 +485,7 @@ def sync_positions_from_trades():
                     **{f"entry_date{i}": p['entry_date'] for i, p in enumerate(open_positions)},
                     **{f"platform_id{i}": p['platform_id'] for i, p in enumerate(open_positions)},
                     **{f"profit_loss{i}": p['profit_loss'] for i, p in enumerate(open_positions)},
+                    **{f"direction{i}": p.get('direction', 'Long') for i, p in enumerate(open_positions)},
                 }
             )
         session.commit()
@@ -432,15 +497,16 @@ def insert_trade(
     price: float,
     quantity: float,
     date: any,
-    trade_type: str
+    trade_type: str,
+    direction: str = "Long",
 ) -> None:
     """Insert a new trade into the trades table."""
     conn = get_st_connection()
     with conn.session as session:
         session.execute(
             text("""
-            INSERT INTO trades (ticker, platform_id, price, quantity, date, trade_type)
-            VALUES (:ticker, :platform_id, :price, :quantity, :date, :trade_type)
+            INSERT INTO trades (ticker, platform_id, price, quantity, date, trade_type, direction)
+            VALUES (:ticker, :platform_id, :price, :quantity, :date, :trade_type, :direction)
             """),
             {
                 "ticker": ticker,
@@ -449,6 +515,7 @@ def insert_trade(
                 "quantity": quantity,
                 "date": date,
                 "trade_type": trade_type,
+                "direction": direction,
             }
         )
         session.commit()
