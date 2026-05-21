@@ -198,15 +198,16 @@ def insert_option_trade(
     transaction_type: str,
     option_open_price: float,
     notes: Optional[str] = None,
-    open_fee: float = 0
+    open_fee: float = 0,
+    quantity: int = 1
 ) -> None:
     """Insert a new option trade into the database."""
     conn = get_st_connection()
     with conn.session as session:
         session.execute(
             text("""
-            INSERT INTO option_trades (ticker, platform_id, strategy, strike_price, expiry_date, trade_date, transaction_type, option_open_price, notes, open_fee)
-            VALUES (:ticker, :platform_id, :strategy, :strike_price, :expiry_date, :trade_date, :transaction_type, :option_open_price, :notes, :open_fee)
+            INSERT INTO option_trades (ticker, platform_id, strategy, strike_price, expiry_date, trade_date, transaction_type, option_open_price, notes, open_fee, quantity)
+            VALUES (:ticker, :platform_id, :strategy, :strike_price, :expiry_date, :trade_date, :transaction_type, :option_open_price, :notes, :open_fee, :quantity)
             """),
             {
                 "ticker": ticker,
@@ -219,10 +220,85 @@ def insert_option_trade(
                 "option_open_price": option_open_price,
                 "notes": notes,
                 "open_fee": open_fee,
+                "quantity": quantity,
             }
         )
         session.commit()
     clear_cache_selective(['positions'])
+
+
+def insert_option_trade_with_legs(
+    ticker: str,
+    platform_id: int,
+    strategy: str,
+    strike_price: float,
+    expiry_date: Any,
+    trade_date: Any,
+    transaction_type: str,
+    option_open_price: float,
+    legs: List[Dict[str, Any]],
+    notes: Optional[str] = None,
+    open_fee: float = 0,
+    quantity: int = 1
+) -> None:
+    """Insert a multi-leg option trade with its legs in a single transaction."""
+    conn = get_st_connection()
+    with conn.session as session:
+        result = session.execute(
+            text("""
+            INSERT INTO option_trades (ticker, platform_id, strategy, strike_price, expiry_date, trade_date, transaction_type, option_open_price, notes, open_fee, quantity)
+            VALUES (:ticker, :platform_id, :strategy, :strike_price, :expiry_date, :trade_date, :transaction_type, :option_open_price, :notes, :open_fee, :quantity)
+            RETURNING id
+            """),
+            {
+                "ticker": ticker,
+                "platform_id": platform_id,
+                "strategy": strategy,
+                "strike_price": strike_price,
+                "expiry_date": expiry_date,
+                "trade_date": trade_date,
+                "transaction_type": transaction_type,
+                "option_open_price": option_open_price,
+                "notes": notes,
+                "open_fee": open_fee,
+                "quantity": quantity,
+            }
+        )
+        trade_id = result.fetchone()[0]
+        for leg in legs:
+            session.execute(
+                text("""
+                INSERT INTO option_trade_legs (option_trade_id, leg_type, side, strike_price, expiry_date, premium)
+                VALUES (:option_trade_id, :leg_type, :side, :strike_price, :expiry_date, :premium)
+                """),
+                {
+                    "option_trade_id": trade_id,
+                    "leg_type": leg["leg_type"],
+                    "side": leg["side"],
+                    "strike_price": leg["strike_price"],
+                    "expiry_date": leg["expiry_date"],
+                    "premium": leg["premium"],
+                }
+            )
+        session.commit()
+    clear_cache_selective(['positions'])
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def load_option_trade_legs(option_trade_id: int = None) -> List[Dict[str, Any]]:
+    """Load option trade legs. If option_trade_id is given, load legs for that trade only."""
+    conn = get_st_connection()
+    with conn.session as session:
+        if option_trade_id:
+            result = session.execute(
+                text("SELECT * FROM option_trade_legs WHERE option_trade_id = :tid ORDER BY id"),
+                {"tid": option_trade_id}
+            )
+        else:
+            result = session.execute(text("SELECT * FROM option_trade_legs ORDER BY option_trade_id, id"))
+        rows = result.fetchall()
+        columns = result.keys()
+        return [dict(zip(columns, row)) for row in rows]
 
 def update_option_trade(trade_id: int, **kwargs) -> None:
     """Update an option trade in the database."""
@@ -259,20 +335,21 @@ def load_option_trades(status=None) -> List[Dict[str, Any]]:
 def close_option_trade(trade_id, status, close_date, option_close_price, notes=None, close_fee=0):
     conn = get_st_connection()
     with conn.session as session:
-        # Get transaction_type, option_open_price, open_fee for this trade
-        result = session.execute(text("SELECT transaction_type, option_open_price, open_fee FROM option_trades WHERE id = :trade_id"), {"trade_id": trade_id})
+        # Get transaction_type, option_open_price, open_fee, quantity for this trade
+        result = session.execute(text("SELECT transaction_type, option_open_price, open_fee, COALESCE(quantity, 1) FROM option_trades WHERE id = :trade_id"), {"trade_id": trade_id})
         row = result.fetchone()
         if row:
-            transaction_type, option_open_price, open_fee = row
+            transaction_type, option_open_price, open_fee, quantity = row
             option_open_price = float(option_open_price) if option_open_price is not None else 0.0
             option_close_price = float(option_close_price) if option_close_price is not None else 0.0
             open_fee = float(open_fee) if open_fee is not None else 0.0
             close_fee = float(close_fee) if close_fee is not None else 0.0
+            quantity = int(quantity) if quantity is not None else 1
             total_fee = open_fee + close_fee
             if transaction_type == "credit":
-                profit_loss = (option_open_price - option_close_price) * 100 - total_fee
+                profit_loss = (option_open_price - option_close_price) * 100 * quantity - total_fee
             else:
-                profit_loss = (option_close_price - option_open_price) * 100 - total_fee
+                profit_loss = (option_close_price - option_open_price) * 100 * quantity - total_fee
         else:
             profit_loss = None
         session.execute(

@@ -42,7 +42,9 @@ def data_entry() -> None:
         platform_map = get_platform_id_to_name_map()
         def trade_label(trade: Dict[str, Any]) -> str:
             platform_name = platform_map.get(trade.get("platform_id"), "Unknown")
-            return f"{trade['id']} |{platform_name} | {trade['ticker']} | {trade['strategy']}"
+            qty = trade.get('quantity', 1) or 1
+            qty_str = f" x{qty}" if qty > 1 else ""
+            return f"{trade['id']} | {platform_name} | {trade['ticker']} | {trade['strategy'].title()}{qty_str}"
         trade_options = [(trade_label(t), t["id"]) for t in open_trades]
         selected = st.selectbox(
             "Select Option Trade to Close",
@@ -54,43 +56,57 @@ def data_entry() -> None:
         trade_id = selected[1] if isinstance(selected, tuple) else None
         trade = next((t for t in open_trades if t["id"] == trade_id), None)
         if trade:
+            # Show legs detail for multi-leg trades
+            from db.db_utils import load_option_trade_legs
+            from ui.option_strategies import is_multi_leg
+            legs = load_option_trade_legs(trade_id) if is_multi_leg(trade.get('strategy', '')) else []
+
             with st.form("close_option_trade_data_entry", clear_on_submit=True):
+                qty = trade.get('quantity', 1) or 1
                 st.write(f"**Ticker:** {trade['ticker']}")
-                st.write(f"**Strategy:** {trade['strategy']}")
+                st.write(f"**Strategy:** {trade['strategy'].title()}")
                 st.write(f"**Trade Date:** {trade['trade_date']}")
-                st.write(f"**Open Price:** {trade['option_open_price']}")
+                st.write(f"**Open Price (net per share):** {trade['option_open_price']}")
+                st.write(f"**Contracts:** {qty}")
+                if legs:
+                    legs_str = " / ".join(
+                        f"{lg['side'].upper()[:1]}${float(lg['strike_price']):.0f}{lg['leg_type'].upper()[:1]} @{float(lg['premium']):.2f}"
+                        for lg in legs
+                    )
+                    st.write(f"**Legs:** {legs_str}")
                 col1, col2 = st.columns(2)
                 with col1:
                     close_status = st.selectbox("Status", ["expired", "exercised", "assigned", "closed"], help="Final status of the option trade.")
                     close_date = st.date_input("Close Date", value=datetime.date.today(), help="Date the option was closed.")
                 with col2:
-                    option_close_price = st.number_input("Option Close Price", min_value=0.0, format="%.2f", help="Price at which the option was closed.")
-                    close_fee = st.number_input("Close Fee", min_value=0.0, format="%.2f", value=0.0, help="Fee paid to close the option.")
+                    option_close_price = st.number_input("Close Price (net per share)", min_value=0.0, format="%.4f", help="Net premium per share to close. For expired trades, enter 0.")
+                    close_fee = st.number_input("Close Fee", min_value=0.0, format="%.4f", value=0.0, help="Total fee paid to close the trade.")
                 notes = st.text_area("Notes", value=trade.get("notes") or "", help="Any additional notes about this trade.")
                 confirm = st.form_submit_button("Confirm Close")
                 if confirm:
                     with st.spinner("Closing option trade..."):
                         close_option_trade(trade_id, close_status, close_date, option_close_price, notes, close_fee)
-                        # If assigned or exercised, insert a stock Buy transaction for 100 shares at strike price
-                        if close_status in ("assigned", "exercised"):
+                        # If assigned or exercised, insert a stock transaction
+                        # (only for single-leg strategies; multi-leg assignment is rare and manual)
+                        if close_status in ("assigned", "exercised") and not legs:
                             from db.db_utils import insert_trade
                             ticker = trade['ticker']
                             platform_id = trade['platform_id']
                             strike_price = trade['strike_price']
                             trade_date = close_date
                             strategy = trade.get('strategy', '').lower()
-                            # Determine trade_type based on strategy 
-                            if "call" in strategy or "put" in strategy:
-                                trade_type = "Buy"
-                            elif "cash secured put" in strategy or "covered call" in strategy:
+                            # Determine trade_type based on strategy
+                            if "cash secured put" in strategy or "covered call" in strategy:
                                 trade_type = "Sell"
+                            elif "call" in strategy or "put" in strategy:
+                                trade_type = "Buy"
                             else:
                                 trade_type = "Buy"  # Default fallback
                             insert_trade(
                                 ticker=ticker,
                                 platform_id=platform_id,
                                 price=strike_price,
-                                quantity=100.0,
+                                quantity=100.0 * qty,
                                 date=trade_date,
                                 trade_type=trade_type
                             )

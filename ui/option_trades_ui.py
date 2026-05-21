@@ -1,5 +1,5 @@
 import streamlit as st
-from db.db_utils import PLATFORM_CACHE, insert_option_trade, load_option_trades
+from db.db_utils import PLATFORM_CACHE, insert_option_trade, load_option_trades, load_option_trade_legs
 import datetime
 import pandas as pd
 from typing import Optional, List, Dict
@@ -120,6 +120,31 @@ def get_option_trades_summary() -> pd.DataFrame:
         "Unrealized Gains (Open)": round(total_unrealized_gains, 2)
     }])
 
+def _build_legs_summary(trade_ids: list) -> Dict:
+    """Build a mapping of trade_id -> legs summary string for multi-leg trades."""
+    from ui.option_strategies import is_multi_leg
+    all_legs = load_option_trade_legs()  # load all legs once
+    legs_by_trade = {}
+    for leg in all_legs:
+        tid = leg["option_trade_id"]
+        legs_by_trade.setdefault(tid, []).append(leg)
+
+    summaries = {}
+    for tid in trade_ids:
+        legs = legs_by_trade.get(tid, [])
+        if not legs:
+            summaries[tid] = ""
+            continue
+        parts = []
+        for lg in legs:
+            side = lg["side"].upper()[:1]  # B or S
+            strike = f"${float(lg['strike_price']):.0f}"
+            ltype = lg["leg_type"].upper()[:1]  # C or P
+            parts.append(f"{side}{strike}{ltype}")
+        summaries[tid] = " / ".join(parts)
+    return summaries, legs_by_trade
+
+
 def option_trades_ui() -> None:
     """Streamlit UI for viewing option trades. No data entry or closing form here."""
     st.title("📈 Option Trades")
@@ -161,6 +186,13 @@ def option_trades_ui() -> None:
         
         st.header("🟢 Open Option Trades")
         if df_open is not None:
+            # Add legs summary column for multi-leg trades
+            if 'id' in pd.DataFrame(open_trades).columns:
+                raw_open = pd.DataFrame(open_trades)
+                trade_ids = raw_open['id'].tolist()
+                legs_summaries, legs_by_trade = _build_legs_summary(trade_ids)
+                df_open['legs'] = raw_open['id'].map(lambda tid: legs_summaries.get(tid, ""))
+            
             df_open = _map_and_reorder_columns(
                 df_open,
                 platform_map,
@@ -183,6 +215,19 @@ def option_trades_ui() -> None:
                 st.dataframe(styled_df, width="stretch", hide_index=True)
             else:
                 st.dataframe(df_open, width="stretch", hide_index=True)
+            
+            # Show expandable leg details for multi-leg open trades
+            multi_leg_trades = [(t['id'], t['ticker'], t['strategy']) for t in open_trades if legs_summaries.get(t['id'], "")]
+            if multi_leg_trades:
+                with st.expander("🦵 View Leg Details (Open Trades)"):
+                    for tid, tkr, strat in multi_leg_trades:
+                        legs = legs_by_trade.get(tid, [])
+                        if legs:
+                            st.markdown(f"**{tkr} — {strat.title()}**")
+                            legs_df = pd.DataFrame(legs)
+                            legs_df = legs_df.drop(columns=['id', 'option_trade_id', 'close_premium'], errors='ignore')
+                            legs_df.columns = [c.replace('_', ' ').title() for c in legs_df.columns]
+                            st.dataframe(legs_df, hide_index=True)
         else:
             st.info("No open option trades.")
         st.header("🔴 Closed Option Trades")
@@ -279,31 +324,125 @@ def option_trades_ui() -> None:
 def option_trades_data_entry():
     """
     Streamlit UI for adding new option trades only (for Data Entry screen).
+    Supports Level 1 (single-leg), Level 3 (spreads), and Level 4 (multi-leg) strategies.
     """
+    from ui.option_strategies import STRATEGY_CONFIG, get_strategy_names, is_multi_leg, get_strategy_legs
+    from db.db_utils import insert_option_trade_with_legs
+
     st.subheader("➕ Add New Option Trade")
+
+    # Strategy selector outside form so changing it rerenders the form with correct leg inputs
+    all_strategies = get_strategy_names()
+    # Group strategies by level for display
+    level_labels = {1: "Level 1 — Single Leg", 3: "Level 3 — Spreads", 4: "Level 4 — Multi-Leg"}
+    grouped = {}
+    for s in all_strategies:
+        lvl = STRATEGY_CONFIG[s]["level"]
+        grouped.setdefault(lvl, []).append(s)
+    # Flatten with separators for the selectbox
+    strategy_options = []
+    for lvl in sorted(grouped.keys()):
+        strategy_options.extend(grouped[lvl])
+
+    strategy = st.selectbox(
+        "Option Strategy",
+        strategy_options,
+        format_func=lambda s: f"{'  ' if STRATEGY_CONFIG[s]['level'] > 1 else ''}{s.title()} (L{STRATEGY_CONFIG[s]['level']})",
+        key="option_strategy_select",
+        help="Select the option strategy. Level 3+ strategies will show leg-by-leg inputs."
+    )
+    multi_leg = is_multi_leg(strategy)
+    leg_templates = get_strategy_legs(strategy)
+
     with st.form("add_option_trade", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             ticker = st.text_input("Ticker", help="Underlying symbol for the option.")
             platform = st.selectbox("Platform", list(PLATFORM_CACHE.keys()), help="Platform where the trade was executed.")
-            strategy = st.selectbox("Option Strategy", [
-                "call", "put", "cash secured put", "covered call"
-            ], help="Type of option strategy.")
-            strike_price = st.number_input("Strike Price", min_value=0.0, format="%.2f", help="Strike price of the option.")
-            expiry_date = st.date_input("Expiry Date", help="Option expiry date.")
+            quantity = st.number_input("Contracts", min_value=1, value=1, step=1, help="Number of contracts.")
         with col2:
             trade_date = st.date_input("Trade Date", value=datetime.date.today(), help="Date the option trade was opened.")
-            transaction_type = st.selectbox("Transaction Type", ["credit", "debit"], help="Credit or debit transaction.")
-            option_open_price = st.number_input("Option Open Price", min_value=0.0, format="%.2f", help="Price at which the option was opened.")
-            open_fee = st.number_input("Open Fee", min_value=0.0, format="%.2f", value=0.0, help="Fee paid to open the option.")
+            open_fee = st.number_input("Open Fee", min_value=0.0, format="%.4f", value=0.0, help="Total fee paid to open the trade.")
             notes = st.text_area("Notes", help="Any additional notes about this trade.")
+
+        if multi_leg:
+            # ── Multi-leg: show per-leg inputs ──
+            st.markdown("---")
+            st.markdown(f"### 🦵 Leg Details — **{strategy.title()}** ({len(leg_templates)} legs)")
+            legs_data = []
+            for i, tmpl in enumerate(leg_templates):
+                side_emoji = "🟢" if tmpl["side"] == "buy" else "🔴"
+                st.markdown(f"**{side_emoji} Leg {i+1}: {tmpl['label']}** ({tmpl['side'].upper()} {tmpl['leg_type'].upper()})")
+                lcol1, lcol2, lcol3 = st.columns(3)
+                with lcol1:
+                    strike = st.number_input("Strike Price", min_value=0.0, format="%.2f", key=f"leg_strike_{i}")
+                with lcol2:
+                    expiry = st.date_input("Expiry Date", key=f"leg_expiry_{i}")
+                with lcol3:
+                    premium = st.number_input("Premium (per share)", min_value=0.0, format="%.4f", key=f"leg_premium_{i}")
+                legs_data.append({
+                    "leg_type": tmpl["leg_type"],
+                    "side": tmpl["side"],
+                    "strike_price": strike,
+                    "expiry_date": expiry,
+                    "premium": premium,
+                })
+            # Auto-calculate net premium: sell legs add credit, buy legs add debit
+            net_premium = sum(
+                l["premium"] if l["side"] == "sell" else -l["premium"]
+                for l in legs_data
+            )
+            transaction_type = "credit" if net_premium >= 0 else "debit"
+            net_display = abs(net_premium)
+            st.info(f"📊 **Net Premium:** ${net_display:.4f} per share ({transaction_type.upper()}) | Per contract: ${net_display * 100:.2f}")
+        else:
+            # ── Single-leg: existing simple inputs ──
+            st.markdown("---")
+            scol1, scol2 = st.columns(2)
+            with scol1:
+                strike_price = st.number_input("Strike Price", min_value=0.0, format="%.2f", help="Strike price of the option.")
+                expiry_date = st.date_input("Expiry Date", help="Option expiry date.")
+            with scol2:
+                default_txn = STRATEGY_CONFIG.get(strategy, {}).get("default_transaction", "credit")
+                txn_options = ["credit", "debit"]
+                transaction_type = st.selectbox("Transaction Type", txn_options, index=txn_options.index(default_txn), help="Credit or debit transaction.")
+                option_open_price = st.number_input("Option Open Price", min_value=0.0, format="%.4f", help="Premium per share.")
+
         submitted = st.form_submit_button("Add Option Trade")
         if submitted:
             if not ticker.strip():
                 st.warning("Ticker cannot be empty.")
-            elif strike_price <= 0 or option_open_price <= 0:
-                st.warning("Strike price and open price must be greater than zero.")
+                return
+
+            if multi_leg:
+                # Validate all legs have strike > 0 and premium >= 0
+                for i, leg in enumerate(legs_data):
+                    if leg["strike_price"] <= 0:
+                        st.warning(f"Leg {i+1} strike price must be greater than zero.")
+                        return
+                # Use first leg's strike/expiry as the parent trade's primary values
+                primary_strike = legs_data[0]["strike_price"]
+                primary_expiry = legs_data[0]["expiry_date"]
+                with st.spinner("Adding multi-leg option trade..."):
+                    insert_option_trade_with_legs(
+                        ticker=ticker.strip().upper(),
+                        platform_id=PLATFORM_CACHE.get(platform),
+                        strategy=strategy,
+                        strike_price=primary_strike,
+                        expiry_date=primary_expiry,
+                        trade_date=trade_date,
+                        transaction_type=transaction_type,
+                        option_open_price=abs(net_premium),
+                        legs=legs_data,
+                        notes=notes,
+                        open_fee=open_fee,
+                        quantity=quantity,
+                    )
+                st.toast(f"Multi-leg trade ({strategy.title()}) added!", icon="✅")
             else:
+                if strike_price <= 0 or option_open_price <= 0:
+                    st.warning("Strike price and open price must be greater than zero.")
+                    return
                 with st.spinner("Adding option trade..."):
                     insert_option_trade(
                         ticker.strip().upper(),
@@ -315,6 +454,7 @@ def option_trades_data_entry():
                         transaction_type,
                         option_open_price,
                         notes,
-                        open_fee
+                        open_fee,
+                        quantity,
                     )
                 st.toast("Option trade added! Please refresh to see the update.", icon="✅")

@@ -54,7 +54,20 @@ CREATE TABLE IF NOT EXISTS option_trades (
     profit_loss NUMERIC(12, 4),
     status VARCHAR(16) CHECK (status IN ('open', 'expired', 'exercised','closed')) DEFAULT 'open',
     close_date DATE,
-    notes TEXT
+    notes TEXT,
+    quantity INTEGER DEFAULT 1
+);
+
+-- OPTION TRADE LEGS TABLE (for multi-leg strategies: spreads, condors, etc.)
+CREATE TABLE IF NOT EXISTS option_trade_legs (
+    id SERIAL PRIMARY KEY,
+    option_trade_id INTEGER NOT NULL REFERENCES option_trades(id) ON DELETE CASCADE,
+    leg_type VARCHAR(4) NOT NULL CHECK (leg_type IN ('call', 'put')),
+    side VARCHAR(4) NOT NULL CHECK (side IN ('buy', 'sell')),
+    strike_price NUMERIC(12, 4) NOT NULL,
+    expiry_date DATE NOT NULL,
+    premium NUMERIC(12, 4) NOT NULL DEFAULT 0,
+    close_premium NUMERIC(12, 4)
 );
 
 -- APPLICATION METADATA TABLE
@@ -116,6 +129,9 @@ CREATE INDEX IF NOT EXISTS idx_option_trades_platform_status ON option_trades(pl
 
 -- Partial index for historical reports (only closed/expired trades)
 CREATE INDEX IF NOT EXISTS idx_option_trades_close_date ON option_trades(close_date) WHERE status IN ('closed', 'expired');
+
+-- OPTION TRADE LEGS TABLE INDEXES
+CREATE INDEX IF NOT EXISTS idx_option_trade_legs_trade_id ON option_trade_legs(option_trade_id);
 
 -- CASH FLOWS TABLE INDEXES
 -- Primary composite index for platform-specific cash flow queries
