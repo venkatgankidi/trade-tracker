@@ -186,6 +186,9 @@ def option_trades_ui() -> None:
         
         st.header("🟢 Open Option Trades")
         if df_open is not None:
+            from ui.option_strategies import get_strategy_level
+            df_open['Option Level'] = df_open['strategy'].apply(lambda s: f"L{get_strategy_level(s)}")
+
             # Add legs summary column for multi-leg trades
             if 'id' in pd.DataFrame(open_trades).columns:
                 raw_open = pd.DataFrame(open_trades)
@@ -197,7 +200,7 @@ def option_trades_ui() -> None:
                 df_open,
                 platform_map,
                 drop_cols=["option_close_price", "close_fee", "profit_loss", "status", "close_date","id"],
-                move_cols=["Platform", "open_fee"]
+                move_cols=["Option Level", "Platform", "open_fee"]
             )
             
             # Reorder to show current_price and unrealized_pnl near the end
@@ -239,11 +242,14 @@ def option_trades_ui() -> None:
         )
         if closed_trades:
             df_closed = pd.DataFrame(closed_trades)
+            from ui.option_strategies import get_strategy_level
+            df_closed['Option Level'] = df_closed['strategy'].apply(lambda s: f"L{get_strategy_level(s)}")
+
             df_closed = _map_and_reorder_columns(
                 df_closed,
                 platform_map,
                 drop_cols=["id","status"],
-                move_cols=["open_fee","Platform"]
+                move_cols=["open_fee", "Option Level", "Platform"]
             )
             # Reorder columns: close_fee, close_date before profit_loss and notes
             col_order = list(df_closed.columns)
@@ -324,17 +330,36 @@ def option_trades_ui() -> None:
 def option_trades_data_entry():
     """
     Streamlit UI for adding new option trades only (for Data Entry screen).
-    Supports Level 1 (single-leg), Level 3 (spreads), and Level 4 (multi-leg) strategies.
+    Supports Webull Option Levels 1, 2, 3, and 4 strategies.
     """
     from ui.option_strategies import STRATEGY_CONFIG, get_strategy_names, is_multi_leg, get_strategy_legs
     from db.db_utils import insert_option_trade_with_legs
 
     st.subheader("➕ Add New Option Trade")
 
+    with st.expander("ℹ️ Webull Options Levels Reference Guide", expanded=False):
+        st.markdown("""
+        ### 📊 Webull Options Trading Levels & Strategies
+        
+        | Level | Category | Allowed Strategies |
+        | :--- | :--- | :--- |
+        | **Level 1** | **Covered & Cash-Secured** | Covered Calls, Buy-Writes, Cash-Secured Puts |
+        | **Level 2** | **Long & Protective / Collars** | Long Calls, Long Puts, Protective Puts, Protective Calls, Collars, Covered Puts, Long Straddles, Long Strangles |
+        | **Level 3** | **Spreads & Butterfly/Condor** | Credit Spreads, Debit Spreads, Long & Short Butterflies, Long & Short Condors, Long & Short Iron Butterflies, Long & Short Iron Condors, Back Ratio Call/Put Spreads |
+        | **Level 4** | **Naked Options & Ratios** | Naked Equity Calls, Naked Equity Puts, Naked Index Calls, Naked Index Puts, Front Ratio Call/Put Spreads, Short Straddles, Short Strangles |
+        
+        *Note: Spreads (Level 3+) require a margin account with a minimum of $2,000 equity. Naked options (Level 4) require a minimum net account value of $10,000.*
+        """)
+
     # Strategy selector outside form so changing it rerenders the form with correct leg inputs
     all_strategies = get_strategy_names()
     # Group strategies by level for display
-    level_labels = {1: "Level 1 — Single Leg", 3: "Level 3 — Spreads", 4: "Level 4 — Multi-Leg"}
+    level_labels = {
+        1: "Level 1 — Covered & Cash-Secured",
+        2: "Level 2 — Long & Protective / Collars",
+        3: "Level 3 — Spreads & Butterflies / Condors",
+        4: "Level 4 — Naked Options & Ratios"
+    }
     grouped = {}
     for s in all_strategies:
         lvl = STRATEGY_CONFIG[s]["level"]
@@ -349,7 +374,7 @@ def option_trades_data_entry():
         strategy_options,
         format_func=lambda s: f"{'  ' if STRATEGY_CONFIG[s]['level'] > 1 else ''}{s.title()} (L{STRATEGY_CONFIG[s]['level']})",
         key="option_strategy_select",
-        help="Select the option strategy. Level 3+ strategies will show leg-by-leg inputs."
+        help="Select the option strategy. Multi-leg strategies will show leg-by-leg inputs."
     )
     multi_leg = is_multi_leg(strategy)
     leg_templates = get_strategy_legs(strategy)

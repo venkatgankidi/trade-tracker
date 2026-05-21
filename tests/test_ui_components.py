@@ -293,3 +293,63 @@ class TestConfig:
             
         except ImportError as e:
             pytest.fail(f"Failed to test config values: {e}")
+
+
+class TestOptionStrategies:
+    """Test options strategies and Webull levels."""
+
+    def test_webull_option_levels(self):
+        """Test that strategies are mapped to correct Webull levels."""
+        from ui.option_strategies import get_strategy_level
+
+        # Level 1
+        assert get_strategy_level("covered call") == 1
+        assert get_strategy_level("cash secured put") == 1
+        assert get_strategy_level("buy-write") == 1
+
+        # Level 2
+        assert get_strategy_level("call") == 2
+        assert get_strategy_level("put") == 2
+        assert get_strategy_level("long call") == 2
+        assert get_strategy_level("long put") == 2
+        assert get_strategy_level("collar") == 2
+        assert get_strategy_level("long straddle") == 2
+        assert get_strategy_level("long strangle") == 2
+
+        # Level 3
+        assert get_strategy_level("bull call spread") == 3
+        assert get_strategy_level("iron condor") == 3
+        assert get_strategy_level("iron butterfly") == 3
+        assert get_strategy_level("credit spread") == 3
+
+        # Level 4
+        assert get_strategy_level("naked call") == 4
+        assert get_strategy_level("naked put") == 4
+        assert get_strategy_level("short straddle") == 4
+        assert get_strategy_level("short strangle") == 4
+
+    def test_is_multi_leg_decoupled(self):
+        """Test that is_multi_leg is decoupled from levels and correctly checks leg count."""
+        from ui.option_strategies import is_multi_leg
+
+        # Multi-leg Level 2
+        assert is_multi_leg("long straddle") is True
+        assert is_multi_leg("long strangle") is True
+        assert is_multi_leg("collar") is True
+
+        # Single-leg Level 1
+        assert is_multi_leg("covered call") is False
+        assert is_multi_leg("cash secured put") is False
+
+        # Single-leg Level 2
+        assert is_multi_leg("long call") is False
+
+        # Single-leg Level 4
+        assert is_multi_leg("naked call") is False
+
+        # Multi-leg Level 3
+        assert is_multi_leg("iron condor") is True
+        assert is_multi_leg("bull call spread") is True
+
+        # Multi-leg Level 4
+        assert is_multi_leg("short straddle") is True
