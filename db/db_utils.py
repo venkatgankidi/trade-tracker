@@ -287,18 +287,22 @@ def insert_option_trade_with_legs(
 @st.cache_data(ttl=60, show_spinner=False)
 def load_option_trade_legs(option_trade_id: int = None) -> List[Dict[str, Any]]:
     """Load option trade legs. If option_trade_id is given, load legs for that trade only."""
-    conn = get_st_connection()
-    with conn.session as session:
-        if option_trade_id:
-            result = session.execute(
-                text("SELECT * FROM option_trade_legs WHERE option_trade_id = :tid ORDER BY id"),
-                {"tid": option_trade_id}
-            )
-        else:
-            result = session.execute(text("SELECT * FROM option_trade_legs ORDER BY option_trade_id, id"))
-        rows = result.fetchall()
-        columns = result.keys()
-        return [dict(zip(columns, row)) for row in rows]
+    try:
+        conn = get_st_connection()
+        with conn.session as session:
+            if option_trade_id:
+                result = session.execute(
+                    text("SELECT * FROM option_trade_legs WHERE option_trade_id = :tid ORDER BY id"),
+                    {"tid": option_trade_id}
+                )
+            else:
+                result = session.execute(text("SELECT * FROM option_trade_legs ORDER BY option_trade_id, id"))
+            rows = result.fetchall()
+            columns = result.keys()
+            return [dict(zip(columns, row)) for row in rows]
+    except Exception as e:
+        st.error(f"Database error loading legs: {e}")
+        return []
 
 def update_option_trade(trade_id: int, **kwargs) -> None:
     """Update an option trade in the database."""
