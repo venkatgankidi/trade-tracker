@@ -39,15 +39,28 @@ def aggregate_gains():
         entry_price = pos.get("entry_price", 0) or 0
         exit_price = pos.get("exit_price", 0) or 0
         quantity = pos.get("quantity", 0) or 0
-        trade_type = pos.get("trade_type") or "Buy"
+        direction = pos.get("direction") or "Long"
         if not exit_date or not entry_date:
             continue
         year = exit_date.year
         holding_period = (exit_date - entry_date).days
-        if str(trade_type).lower() == "sell":
-            gain = (entry_price - exit_price) * quantity
+        # Prefer the pre-computed profit_loss (already direction-aware for both
+        # Long and Short trades set by sync_positions_from_trades).  Fall back
+        # to a direction-based price calculation for manually inserted positions
+        # that may not have profit_loss stored.
+        raw_pl = pos.get("profit_loss")
+        if raw_pl is not None:
+            try:
+                gain = float(raw_pl)
+            except Exception:
+                gain = 0.0
         else:
-            gain = (exit_price - entry_price) * quantity
+            if str(direction).capitalize() == "Short":
+                # Short: profit when entry (sell) price > exit (cover) price
+                gain = (entry_price - exit_price) * quantity
+            else:
+                # Long: profit when exit (sell) price > entry (buy) price
+                gain = (exit_price - entry_price) * quantity
         term = "Long Term" if holding_period > LONG_TERM_DAYS else "Short Term"
         tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
         yearly.setdefault(year, {"gain": 0, "tax": 0})
