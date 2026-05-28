@@ -379,6 +379,50 @@ def option_trades_data_entry():
     multi_leg = is_multi_leg(strategy)
     leg_templates = get_strategy_legs(strategy)
 
+    # ── Multi-leg inputs live OUTSIDE the form for live net-premium updates ──
+    if multi_leg:
+        st.markdown("---")
+        st.markdown(f"### 🦵 Leg Details — **{strategy.title()}** ({len(leg_templates)} legs)")
+        for i, tmpl in enumerate(leg_templates):
+            side_emoji = "🟢" if tmpl["side"] == "buy" else "🔴"
+            st.markdown(f"**{side_emoji} Leg {i+1}: {tmpl['label']}** ({tmpl['side'].upper()} {tmpl['leg_type'].upper()})")
+            lcol1, lcol2, lcol3 = st.columns(3)
+            with lcol1:
+                st.number_input("Strike Price", min_value=0.0, format="%.2f", key=f"leg_strike_{i}")
+            with lcol2:
+                st.date_input("Expiry Date", key=f"leg_expiry_{i}")
+            with lcol3:
+                st.number_input("Premium (per share)", min_value=0.0, format="%.4f", key=f"leg_premium_{i}")
+
+        # Live net premium — recalculates on every widget interaction
+        legs_data_live = [
+            {
+                "leg_type": tmpl["leg_type"],
+                "side": tmpl["side"],
+                "strike_price": st.session_state.get(f"leg_strike_{i}", 0.0),
+                "expiry_date": st.session_state.get(f"leg_expiry_{i}", datetime.date.today()),
+                "premium": st.session_state.get(f"leg_premium_{i}", 0.0),
+            }
+            for i, tmpl in enumerate(leg_templates)
+        ]
+        net_premium_live = sum(
+            l["premium"] if l["side"] == "sell" else -l["premium"]
+            for l in legs_data_live
+        )
+        txn_type_live = "credit" if net_premium_live >= 0 else "debit"
+        net_display_live = abs(net_premium_live)
+        color = "green" if txn_type_live == "credit" else "orange"
+        st.markdown(
+            f"<div style='background:rgba(0,0,0,0.05);border-left:4px solid {color};"
+            f"padding:10px 16px;border-radius:6px;margin:8px 0'>"
+            f"📊 <b>Net Premium:</b> ${net_display_live:.4f}/share "
+            f"(<span style='color:{color}'><b>{txn_type_live.upper()}</b></span>) &nbsp;|&nbsp; "
+            f"Per contract: <b>${net_display_live * 100:.2f}</b>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("---")
+
     with st.form("add_option_trade", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
@@ -390,37 +434,7 @@ def option_trades_data_entry():
             open_fee = st.number_input("Open Fee", min_value=0.0, format="%.4f", value=0.0, help="Total fee paid to open the trade.")
             notes = st.text_area("Notes", help="Any additional notes about this trade.")
 
-        if multi_leg:
-            # ── Multi-leg: show per-leg inputs ──
-            st.markdown("---")
-            st.markdown(f"### 🦵 Leg Details — **{strategy.title()}** ({len(leg_templates)} legs)")
-            legs_data = []
-            for i, tmpl in enumerate(leg_templates):
-                side_emoji = "🟢" if tmpl["side"] == "buy" else "🔴"
-                st.markdown(f"**{side_emoji} Leg {i+1}: {tmpl['label']}** ({tmpl['side'].upper()} {tmpl['leg_type'].upper()})")
-                lcol1, lcol2, lcol3 = st.columns(3)
-                with lcol1:
-                    strike = st.number_input("Strike Price", min_value=0.0, format="%.2f", key=f"leg_strike_{i}")
-                with lcol2:
-                    expiry = st.date_input("Expiry Date", key=f"leg_expiry_{i}")
-                with lcol3:
-                    premium = st.number_input("Premium (per share)", min_value=0.0, format="%.4f", key=f"leg_premium_{i}")
-                legs_data.append({
-                    "leg_type": tmpl["leg_type"],
-                    "side": tmpl["side"],
-                    "strike_price": strike,
-                    "expiry_date": expiry,
-                    "premium": premium,
-                })
-            # Auto-calculate net premium: sell legs add credit, buy legs add debit
-            net_premium = sum(
-                l["premium"] if l["side"] == "sell" else -l["premium"]
-                for l in legs_data
-            )
-            transaction_type = "credit" if net_premium >= 0 else "debit"
-            net_display = abs(net_premium)
-            st.info(f"📊 **Net Premium:** ${net_display:.4f} per share ({transaction_type.upper()}) | Per contract: ${net_display * 100:.2f}")
-        else:
+        if not multi_leg:
             # ── Single-leg: existing simple inputs ──
             st.markdown("---")
             scol1, scol2 = st.columns(2)
@@ -440,7 +454,24 @@ def option_trades_data_entry():
                 return
 
             if multi_leg:
-                # Validate all legs have strike > 0 and premium >= 0
+                # Read leg values from session_state (set by the out-of-form widgets above)
+                legs_data = [
+                    {
+                        "leg_type": tmpl["leg_type"],
+                        "side": tmpl["side"],
+                        "strike_price": st.session_state.get(f"leg_strike_{i}", 0.0),
+                        "expiry_date": st.session_state.get(f"leg_expiry_{i}", datetime.date.today()),
+                        "premium": st.session_state.get(f"leg_premium_{i}", 0.0),
+                    }
+                    for i, tmpl in enumerate(leg_templates)
+                ]
+                net_premium = sum(
+                    l["premium"] if l["side"] == "sell" else -l["premium"]
+                    for l in legs_data
+                )
+                transaction_type = "credit" if net_premium >= 0 else "debit"
+
+                # Validate all legs have strike > 0
                 for i, leg in enumerate(legs_data):
                     if leg["strike_price"] <= 0:
                         st.warning(f"Leg {i+1} strike price must be greater than zero.")
