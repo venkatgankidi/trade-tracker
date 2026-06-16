@@ -42,7 +42,8 @@ def _make_trade(ticker, date_str, trade_type="buy", price=50.0, quantity=100):
 
 
 def _make_opt(ticker, trade_date_str, close_date_str=None, profit_loss=0.0,
-              status="closed", opt_id=1, strategy="cash secured put"):
+              status="closed", opt_id=1, strategy="cash secured put",
+              transaction_type="debit"):
     """Build a minimal option-trade dict."""
     return {
         "id": opt_id,
@@ -54,6 +55,7 @@ def _make_opt(ticker, trade_date_str, close_date_str=None, profit_loss=0.0,
         "strategy": strategy,
         "quantity": 1,
         "option_open_price": 2.0,
+        "transaction_type": transaction_type,
     }
 
 
@@ -222,7 +224,7 @@ class TestWashSaleOptionLoss:
         assert result == []
 
     def test_option_loss_new_option_triggers_wash(self):
-        """Option closed at loss + new option on same ticker within window → wash sale."""
+        """Option closed at loss + new **debit** (long) option within window → wash sale."""
         closed_opt = _make_opt(
             "MSFT",
             trade_date_str="2024-01-01",
@@ -230,17 +232,69 @@ class TestWashSaleOptionLoss:
             profit_loss=-180.0,
             status="closed",
             opt_id=10,
+            transaction_type="debit",
         )
         new_opt = _make_opt(
             "MSFT",
             trade_date_str="2024-03-12",
             status="open",
             opt_id=11,
+            strategy="long call",
+            transaction_type="debit",  # BOUGHT option → wash sale
         )
-        # all_option_trades includes both
         result = detect_wash_sales([], [closed_opt], [], [closed_opt, new_opt])
         assert len(result) == 1
         assert result[0]["disallowed_loss"] == pytest.approx(180.0)
+
+    def test_credit_option_replacement_does_not_trigger(self):
+        """Writing a credit option (CSP/CC) after closing an option at a loss → NOT a wash sale.
+
+        Selling/writing an option creates an obligation, not an acquisition.
+        Per IRS §1091 only *acquiring* an option triggers the wash sale rule.
+        """
+        closed_opt = _make_opt(
+            "AAPL",
+            trade_date_str="2024-01-01",
+            close_date_str="2024-03-01",
+            profit_loss=-300.0,
+            status="closed",
+            opt_id=20,
+            transaction_type="debit",
+        )
+        # Write a new CSP (credit) within the window
+        new_csp = _make_opt(
+            "AAPL",
+            trade_date_str="2024-03-10",
+            status="open",
+            opt_id=21,
+            strategy="cash secured put",
+            transaction_type="credit",  # WRITTEN option → NOT a wash sale
+        )
+        result = detect_wash_sales([], [closed_opt], [], [closed_opt, new_csp])
+        assert result == [], "Writing a CSP/CC should not trigger a wash sale"
+
+    def test_debit_option_replacement_triggers(self):
+        """Buying a long option after closing an option at a loss → wash sale."""
+        closed_opt = _make_opt(
+            "NVDA",
+            trade_date_str="2024-01-01",
+            close_date_str="2024-03-01",
+            profit_loss=-400.0,
+            status="closed",
+            opt_id=30,
+            transaction_type="debit",
+        )
+        new_long_call = _make_opt(
+            "NVDA",
+            trade_date_str="2024-03-08",
+            status="open",
+            opt_id=31,
+            strategy="long call",
+            transaction_type="debit",  # BOUGHT option → wash sale
+        )
+        result = detect_wash_sales([], [closed_opt], [], [closed_opt, new_long_call])
+        assert len(result) == 1
+        assert result[0]["disallowed_loss"] == pytest.approx(400.0)
 
     def test_option_self_excluded_as_replacement(self):
         """The same option trade is never treated as its own replacement."""

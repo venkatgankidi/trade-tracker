@@ -79,6 +79,8 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
                 "strategy": opt.get("strategy", ""),
                 "quantity": int(opt.get("quantity") or 1),
                 "option_open_price": float(opt.get("option_open_price") or 0),
+                # Needed to distinguish bought (debit) vs written (credit) options
+                "transaction_type": str(opt.get("transaction_type") or "debit").lower(),
             })
 
     def _find_stock_replacement(ticker, loss_date):
@@ -102,17 +104,25 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
         return None
 
     def _find_option_replacement(ticker, loss_date, exclude_opt_id=None):
-        """Return earliest option open of same ticker within the wash-sale window.
+        """Return earliest **bought** (debit/long) option on same ticker within window.
 
-        Only option-to-option matches are considered per the simplified scope.
-        The originating trade (exclude_opt_id) is never counted as its own replacement.
-        Same-calendar-day opens are excluded.
+        Per IRS §1091, a wash sale is triggered only when you *acquire* an option
+        to buy substantially identical stock.  Writing options (credit positions
+        such as cash-secured puts or covered calls) creates an *obligation*, not
+        an acquisition, so they do NOT trigger a wash sale.
+
+        Concretely:
+          debit  (long call / long put)  → qualifies as replacement ✓
+          credit (CSP / covered call)    → does NOT qualify           ✗
         """
         start = loss_date - window
         end = loss_date + window
         loss_day = loss_date.date()
         for o in sorted(option_opens_by_ticker.get(ticker, []), key=lambda x: x["date"]):
             if o.get("id") == exclude_opt_id:
+                continue
+            # Skip written (credit) options — they are not an acquisition
+            if o.get("transaction_type", "debit") != "debit":
                 continue
             if start <= o["date"] <= end and o["date"].date() != loss_day:
                 return {
@@ -505,22 +515,37 @@ def taxes_ui() -> None:
             st.markdown("""
 **IRS §1091 — Wash Sale Rule**
 
-A loss from selling a security is **disallowed** if you buy or acquire a
-*substantially identical* security within **30 days before or after** the sale.
+A loss from selling a security is **disallowed** if you *acquire* a substantially
+identical security within **30 days before or after** the sale.
 
+#### Stocks
 | Scenario | Wash Sale? |
 |---|---|
 | Sell stock at loss → buy same stock within 30 days | ✅ Yes |
-| Sell stock at loss → open option on same stock within 30 days | ✅ Yes |
-| Close option at loss → open new option on same ticker within 30 days | ✅ Yes |
 | Sell stock at loss → buy different stock | ❌ No |
 | Sell stock at a **gain** → repurchase | ❌ No (only losses) |
 
-**The disallowed loss is not permanently lost.** It is added to the cost basis
-of the replacement security, deferring the loss until you eventually sell that
-replacement lot.
+#### Options — the key nuance
+Only **buying** an option (acquiring the right to purchase) triggers a wash sale.
+**Writing** an option (selling a CSP or covered call) is an *obligation* you sold, not
+an option you acquired — it does **not** trigger the rule.
 
-> This tracker flags wash sales automatically. For actual tax filing, verify
-> with your broker's 1099-B or tax software (TurboTax, H&R Block, etc.) which
-> apply the rule on a per-share, FIFO basis with more granularity.
+| Scenario | Wash Sale? |
+|---|---|
+| Sell stock at loss → buy **long call** within 30 days | ✅ Yes (acquired option to buy) |
+| Sell stock at loss → buy **long put** within 30 days | ✅ Yes (acquired option) |
+| Close option at loss → buy substantially identical **long** option | ✅ Yes |
+| Sell stock at loss → **write a covered call** | ❌ No (sold an obligation) |
+| Sell stock at loss → **write a cash-secured put** | ❌ No (sold an obligation) |
+| Close option at loss → **write** a new CSP or covered call | ❌ No (sold, not acquired) |
+
+> **This tracker applies the correct rule:** only debit (long/bought) option opens
+> are treated as wash-sale replacement purchases. Written options (credit) are ignored.
+
+**The disallowed loss is not permanently lost.** It is added to the cost basis of the
+replacement security, deferring the loss until you eventually sell that replacement lot.
+
+> For actual tax filing, verify with your broker's 1099-B or tax software (TurboTax,
+> H\&R Block, etc.) which apply the rule on a per-share, FIFO basis with more granularity.
+> Also note: wash sales apply if a **spouse** or your **IRA/Roth IRA** buys within the window.
             """)
