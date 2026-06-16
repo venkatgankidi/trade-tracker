@@ -499,8 +499,8 @@ def taxes_ui() -> None:
                 "Allowed Loss": round(ws.get("allowed_loss", ws["raw_loss"]), 2),
                 "Replacement Type": ws["replacement_type"],
                 "Replacement Date": ws["replacement_date"].strftime("%Y-%m-%d"),
-                "Sold Qty": ws.get("sold_qty", ""),
-                "Matched Qty": ws.get("matched_qty", ""),
+                "Sold Qty": ws.get("sold_qty", None),
+                "Matched Qty": ws.get("matched_qty", None),
                 "Direction": ws.get("direction", "N/A"),
                 "Term": ws["term"],
             })
@@ -603,6 +603,6 @@ on the (N − M) shares is **still deductible**.
 replacement security, deferring the loss until you eventually sell that replacement lot.
 
 > For actual tax filing, verify with your broker's 1099-B or tax software (TurboTax,
-> H\&R Block, etc.) which apply the rule on a per-share, FIFO basis with more granularity.
+> H&R Block, etc.) which apply the rule on a per-share, FIFO basis with more granularity.
 > Also note: wash sales apply if a **spouse** or your **IRA/Roth IRA** buys within the window.
             """)
