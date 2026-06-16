@@ -81,17 +81,15 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
                 "option_open_price": float(opt.get("option_open_price") or 0),
             })
 
-    def _find_replacement(ticker, loss_date, exclude_opt_id=None):
-        """Return earliest replacement purchase within the wash-sale window.
+    def _find_stock_replacement(ticker, loss_date):
+        """Return earliest stock buy of same ticker within the wash-sale window.
 
-        Stock buys are checked first; then option opens on the same underlying.
-        Same-calendar-day transactions are excluded (can't be the triggering buy
-        since those are processed as a matched lot on the same settlement cycle).
+        Only stock-to-stock matches are considered per the simplified scope.
+        Same-calendar-day buys are excluded (settlement-day matching).
         """
         start = loss_date - window
         end = loss_date + window
         loss_day = loss_date.date()
-
         for b in sorted(stock_buys_by_ticker.get(ticker, []), key=lambda x: x["date"]):
             if start <= b["date"] <= end and b["date"].date() != loss_day:
                 return {
@@ -101,7 +99,18 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
                     "price": b["price"],
                     "quantity": b["quantity"],
                 }
+        return None
 
+    def _find_option_replacement(ticker, loss_date, exclude_opt_id=None):
+        """Return earliest option open of same ticker within the wash-sale window.
+
+        Only option-to-option matches are considered per the simplified scope.
+        The originating trade (exclude_opt_id) is never counted as its own replacement.
+        Same-calendar-day opens are excluded.
+        """
+        start = loss_date - window
+        end = loss_date + window
+        loss_day = loss_date.date()
         for o in sorted(option_opens_by_ticker.get(ticker, []), key=lambda x: x["date"]):
             if o.get("id") == exclude_opt_id:
                 continue
@@ -110,9 +119,8 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
                     "type": f"Option Open ({o['strategy'].title()})",
                     "date": o["date"],
                     "ticker": ticker,
-                    # Options: effective unit = 100 shares per contract
                     "price": o["option_open_price"],
-                    "quantity": o["quantity"] * 100,
+                    "quantity": o["quantity"] * 100,  # contracts → shares
                 }
         return None
 
@@ -133,7 +141,8 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
         if not exit_date or not ticker:
             continue
 
-        replacement = _find_replacement(ticker, exit_date)
+        # Stock losses: only check for a replacement stock buy
+        replacement = _find_stock_replacement(ticker, exit_date)
         if not replacement:
             continue
 
@@ -144,7 +153,7 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
 
         # Per-share cost-basis uplift for stock replacement lots
         repl_qty = replacement["quantity"]
-        basis_adj_per_share = round(disallowed / repl_qty, 4) if repl_qty > 0 and replacement["type"] == "Stock Buy" else None
+        basis_adj_per_share = round(disallowed / repl_qty, 4) if repl_qty > 0 else None
 
         wash_sales.append({
             "ticker": ticker,
@@ -176,7 +185,8 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
         if not close_date or not ticker:
             continue
 
-        replacement = _find_replacement(ticker, close_date, exclude_opt_id=opt.get("id"))
+        # Option losses: only check for a replacement option open
+        replacement = _find_option_replacement(ticker, close_date, exclude_opt_id=opt.get("id"))
         if not replacement:
             continue
 
@@ -186,7 +196,8 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
         tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
 
         repl_qty = replacement["quantity"]
-        basis_adj_per_share = round(disallowed / repl_qty, 4) if repl_qty > 0 and replacement["type"] == "Stock Buy" else None
+        # Option replacements carry the deferred loss at the contract level (no per-share figure)
+        basis_adj_per_share = None
 
         wash_sales.append({
             "ticker": ticker,

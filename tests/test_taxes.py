@@ -171,40 +171,21 @@ class TestWashSaleStockLoss:
 
 
 # ---------------------------------------------------------------------------
-# detect_wash_sales — stock loss + option replacement
+# detect_wash_sales — cross-type isolation (stock ≠ option)
 # ---------------------------------------------------------------------------
 
-class TestWashSaleOptionReplacement:
+class TestWashSaleCrossTypeIsolation:
+    """Stock losses must NOT be triggered by option opens, and vice versa."""
 
-    def test_stock_loss_option_open_triggers_wash(self):
-        """Selling stock at a loss and opening an option on same ticker → wash sale."""
+    def test_stock_loss_option_open_does_not_trigger(self):
+        """Selling stock at a loss + opening an option does NOT trigger wash sale."""
         pos = _make_pos("AAPL", "2024-01-01", "2024-03-01", profit_loss=-600)
         opt = _make_opt("AAPL", trade_date_str="2024-03-10", status="open", opt_id=99)
         result = detect_wash_sales([pos], [], [], [opt])
-        assert len(result) == 1
-        ws = result[0]
-        assert ws["ticker"] == "AAPL"
-        assert "Option Open" in ws["replacement_type"]
-        assert ws["disallowed_loss"] == pytest.approx(600.0)
-        # No per-share adj for option replacements
-        assert ws["basis_adj_per_share"] is None
+        assert result == [], "Stock loss should not be triggered by an option open"
 
-    def test_stock_loss_option_outside_window_no_wash(self):
-        """Option opened 31 days after loss sale → no wash sale."""
-        pos = _make_pos("AAPL", "2024-01-01", "2024-03-01", profit_loss=-600)
-        opt = _make_opt("AAPL", trade_date_str="2024-04-02", status="open", opt_id=88)
-        result = detect_wash_sales([pos], [], [], [opt])
-        assert result == []
-
-
-# ---------------------------------------------------------------------------
-# detect_wash_sales — option loss scenarios
-# ---------------------------------------------------------------------------
-
-class TestWashSaleOptionLoss:
-
-    def test_option_loss_stock_buy_triggers_wash(self):
-        """Option closed at a loss + stock buy within window → wash sale."""
+    def test_option_loss_stock_buy_does_not_trigger(self):
+        """Closing an option at a loss + buying the underlying stock does NOT trigger wash sale."""
         opt = _make_opt(
             "TSLA",
             trade_date_str="2024-01-15",
@@ -214,11 +195,31 @@ class TestWashSaleOptionLoss:
             opt_id=1,
         )
         trade = _make_trade("TSLA", "2024-03-10", trade_type="buy")
+        # all_option_trades has the closed opt but no new option open
         result = detect_wash_sales([], [opt], [trade], [opt])
-        assert len(result) == 1
-        ws = result[0]
-        assert ws["asset_type"] == "Option"
-        assert ws["disallowed_loss"] == pytest.approx(250.0)
+        assert result == [], "Option loss should not be triggered by a stock buy"
+
+
+# ---------------------------------------------------------------------------
+# detect_wash_sales — option loss scenarios
+# ---------------------------------------------------------------------------
+
+class TestWashSaleOptionLoss:
+
+    def test_option_loss_no_replacement_no_wash(self):
+        """Option closed at a loss with no other option open → no wash sale."""
+        opt = _make_opt(
+            "TSLA",
+            trade_date_str="2024-01-15",
+            close_date_str="2024-03-01",
+            profit_loss=-250.0,
+            status="closed",
+            opt_id=1,
+        )
+        # No new option opened; stock buy present but should be ignored
+        trade = _make_trade("TSLA", "2024-03-10", trade_type="buy")
+        result = detect_wash_sales([], [opt], [trade], [opt])
+        assert result == []
 
     def test_option_loss_new_option_triggers_wash(self):
         """Option closed at loss + new option on same ticker within window → wash sale."""
@@ -284,7 +285,8 @@ class TestWashSaleYearAttribution:
         assert result[0]["year"] == 2023  # year of the SALE, not the repurchase
 
     def test_year_is_close_year_for_options(self):
-        opt = _make_opt(
+        """Year is the year of the option close (sale date), not the replacement."""
+        closed_opt = _make_opt(
             "AMD",
             trade_date_str="2023-11-15",
             close_date_str="2023-12-30",
@@ -292,7 +294,12 @@ class TestWashSaleYearAttribution:
             status="closed",
             opt_id=7,
         )
-        trade = _make_trade("AMD", "2024-01-10", trade_type="buy")
-        result = detect_wash_sales([], [opt], [trade], [opt])
+        new_opt = _make_opt(
+            "AMD",
+            trade_date_str="2024-01-10",  # within 30 days, new year
+            status="open",
+            opt_id=8,
+        )
+        result = detect_wash_sales([], [closed_opt], [], [closed_opt, new_opt])
         assert len(result) == 1
-        assert result[0]["year"] == 2023
+        assert result[0]["year"] == 2023  # year of the close, not the replacement
