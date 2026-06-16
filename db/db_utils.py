@@ -336,6 +336,25 @@ def load_option_trades(status=None) -> List[Dict[str, Any]]:
         columns = result.keys()
         return [dict(zip(columns, row)) for row in rows]
 
+@st.cache_data(ttl=60, show_spinner=False)
+def load_all_trades() -> List[Dict[str, Any]]:
+    """Load all raw trades from the trades table.
+
+    Used by the wash-sale detection engine to find replacement stock buys
+    within the 30-day window around a loss sale.
+    """
+    conn = get_st_connection()
+    with conn.session as session:
+        result = session.execute(text("""
+            SELECT id, ticker, platform_id, price, quantity, date, trade_type, direction
+            FROM trades
+            ORDER BY date, id
+        """))
+        rows = result.fetchall()
+        columns = ["id", "ticker", "platform_id", "price", "quantity", "date", "trade_type", "direction"]
+        return [dict(zip(columns, row)) for row in rows]
+
+
 def close_option_trade(trade_id, status, close_date, option_close_price, notes=None, close_fee=0):
     conn = get_st_connection()
     with conn.session as session:

@@ -92,20 +92,38 @@ def data_entry() -> None:
                             from db.db_utils import insert_trade
                             ticker = trade['ticker']
                             platform_id = trade['platform_id']
-                            strike_price = trade['strike_price']
+                            strike_price = float(trade['strike_price'])
+                            premium = float(trade.get('option_open_price') or 0.0)
                             trade_date = close_date
                             strategy = trade.get('strategy', '').lower()
-                            # Determine trade_type based on strategy
-                            if "cash secured put" in strategy or "covered call" in strategy:
-                                trade_type = "Sell"
-                            elif "call" in strategy or "put" in strategy:
+                            # Determine trade_type and effective price based on strategy:
+                            #   CSP assigned  → BUY 100 shares at (strike - premium received)
+                            #                   Premium lowers cost basis per IRS rules.
+                            #   Covered Call assigned → SELL 100 shares at (strike + premium received)
+                            #                   Premium increases effective sale proceeds.
+                            #   Long Put exercised → SELL 100 shares at strike
+                            #   Long Call exercised → BUY  100 shares at strike
+                            if "cash secured put" in strategy:
                                 trade_type = "Buy"
+                                effective_price = strike_price - premium
+                            elif "covered call" in strategy:
+                                trade_type = "Sell"
+                                effective_price = strike_price + premium
+                            elif "put" in strategy:
+                                # Long put exercised: sell shares at strike
+                                trade_type = "Sell"
+                                effective_price = strike_price
+                            elif "call" in strategy:
+                                # Long call exercised: buy shares at strike
+                                trade_type = "Buy"
+                                effective_price = strike_price
                             else:
                                 trade_type = "Buy"  # Default fallback
+                                effective_price = strike_price
                             insert_trade(
                                 ticker=ticker,
                                 platform_id=platform_id,
-                                price=strike_price,
+                                price=effective_price,
                                 quantity=100.0 * qty,
                                 date=trade_date,
                                 trade_type=trade_type
