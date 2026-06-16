@@ -606,19 +606,3 @@ replacement security, deferring the loss until you eventually sell that replacem
 > H\&R Block, etc.) which apply the rule on a per-share, FIFO basis with more granularity.
 > Also note: wash sales apply if a **spouse** or your **IRA/Roth IRA** buys within the window.
             """)
-
-� buy substantially identical **long** option | ✅ Yes |
-| Sell stock at loss → **write a covered call** | ❌ No (sold an obligation) |
-| Sell stock at loss → **write a cash-secured put** | ❌ No (sold an obligation) |
-| Close option at loss → **write** a new CSP or covered call | ❌ No (sold, not acquired) |
-
-> **This tracker applies the correct rule:** only debit (long/bought) option opens
-> are treated as wash-sale replacement purchases. Written options (credit) are ignored.
-
-**The disallowed loss is not permanently lost.** It is added to the cost basis of the
-replacement security, deferring the loss until you eventually sell that replacement lot.
-
-> For actual tax filing, verify with your broker's 1099-B or tax software (TurboTax,
-> H\&R Block, etc.) which apply the rule on a per-share, FIFO basis with more granularity.
-> Also note: wash sales apply if a **spouse** or your **IRA/Roth IRA** buys within the window.
-            """)

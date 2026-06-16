@@ -13,7 +13,7 @@ from ui.taxes_ui import detect_wash_sales, _parse_date, WASH_SALE_WINDOW_DAYS
 # Helpers to build minimal test fixtures
 # ---------------------------------------------------------------------------
 
-def _make_pos(ticker, entry_date, exit_date, profit_loss, quantity=100):
+def _make_pos(ticker, entry_date, exit_date, profit_loss, quantity=100, direction="Long"):
     """Build a minimal closed-position dict."""
     return {
         "ticker": ticker,
@@ -23,7 +23,7 @@ def _make_pos(ticker, entry_date, exit_date, profit_loss, quantity=100):
         "exit_price": 50.0 + profit_loss / quantity,
         "quantity": quantity,
         "profit_loss": profit_loss,
-        "direction": "Long",
+        "direction": direction,
     }
 
 
