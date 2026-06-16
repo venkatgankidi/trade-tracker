@@ -56,17 +56,28 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
     """
     window = timedelta(days=WASH_SALE_WINDOW_DAYS)
 
-    # --- Index stock buys by ticker ----------------------------------------
-    stock_buys_by_ticker: dict = defaultdict(list)
+    # --- Index stock trades by direction -------------------------------------
+    # Long losses need a replacement *long buy* (same ticker, Long direction).
+    # Short losses need a replacement *short sell-to-open* (same ticker, Short direction).
+    # Mixing directions would falsely flag a buy-to-cover as a wash-sale trigger
+    # for a long loss, or vice versa.
+    long_buys_by_ticker: dict = defaultdict(list)
+    short_sells_by_ticker: dict = defaultdict(list)
     for t in all_raw_trades:
-        if str(t.get("trade_type", "")).lower() == "buy":
-            d = _parse_date(t.get("date"))
-            if d:
-                stock_buys_by_ticker[t["ticker"]].append({
-                    "date": d,
-                    "price": float(t.get("price") or 0),
-                    "quantity": float(t.get("quantity") or 0),
-                })
+        d = _parse_date(t.get("date"))
+        if not d:
+            continue
+        ttype = str(t.get("trade_type", "")).lower()
+        tdir = str(t.get("direction", "Long")).strip().capitalize()
+        entry = {
+            "date": d,
+            "price": float(t.get("price") or 0),
+            "quantity": float(t.get("quantity") or 0),
+        }
+        if ttype == "buy" and tdir == "Long":
+            long_buys_by_ticker[t["ticker"]].append(entry)
+        elif ttype == "sell" and tdir == "Short":
+            short_sells_by_ticker[t["ticker"]].append(entry)
 
     # --- Index option openings by ticker ------------------------------------
     option_opens_by_ticker: dict = defaultdict(list)
@@ -83,19 +94,25 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
                 "transaction_type": str(opt.get("transaction_type") or "debit").lower(),
             })
 
-    def _find_stock_replacement(ticker, loss_date):
-        """Return earliest stock buy of same ticker within the wash-sale window.
+    def _find_stock_replacement(ticker, loss_date, direction="Long"):
+        """Return the earliest directional replacement trade within the wash-sale window.
 
-        Only stock-to-stock matches are considered per the simplified scope.
-        Same-calendar-day buys are excluded (settlement-day matching).
+        Direction determines which trade index to search:
+          Long  loss → look for a new long buy  (buy + Long)
+          Short loss → look for a new short sell-to-open (sell + Short)
+
+        Same-calendar-day trades are excluded (settlement-day matching).
+        Returns the replacement trade dict, or None if no match found.
         """
         start = loss_date - window
         end = loss_date + window
         loss_day = loss_date.date()
-        for b in sorted(stock_buys_by_ticker.get(ticker, []), key=lambda x: x["date"]):
+        candidates = long_buys_by_ticker if direction == "Long" else short_sells_by_ticker
+        label = "Stock Buy (Long)" if direction == "Long" else "Short Sell (Open)"
+        for b in sorted(candidates.get(ticker, []), key=lambda x: x["date"]):
             if start <= b["date"] <= end and b["date"].date() != loss_day:
                 return {
-                    "type": "Stock Buy",
+                    "type": label,
                     "date": b["date"],
                     "ticker": ticker,
                     "price": b["price"],
@@ -151,26 +168,42 @@ def detect_wash_sales(closed_positions, closed_options, all_raw_trades, all_opti
         if not exit_date or not ticker:
             continue
 
-        # Stock losses: only check for a replacement stock buy
-        replacement = _find_stock_replacement(ticker, exit_date)
+        direction = str(pos.get("direction") or "Long").strip().capitalize()
+
+        # Stock losses: only check for a same-direction replacement trade
+        replacement = _find_stock_replacement(ticker, exit_date, direction)
         if not replacement:
             continue
 
-        disallowed = abs(pl)
         holding_period = (exit_date - entry_date).days if entry_date else 0
         term = "Long Term" if holding_period > LONG_TERM_DAYS else "Short Term"
         tax_rate = LONG_TERM_TAX_RATE if term == "Long Term" else SHORT_TERM_TAX_RATE
 
-        # Per-share cost-basis uplift for stock replacement lots
+        # --- Proportional disallowance (IRS §1091) --------------------------
+        # If you sold N shares and only repurchased M shares (M <= N), only the
+        # fraction M/N of the loss is disallowed. This correctly handles DCA
+        # positions where you sell the full lot but repurchase fewer shares, or
+        # partial sells where only some of the loss triggers a wash sale.
+        sold_qty = float(pos.get("quantity") or 0)
         repl_qty = replacement["quantity"]
-        basis_adj_per_share = round(disallowed / repl_qty, 4) if repl_qty > 0 else None
+        matched_qty = min(repl_qty, sold_qty) if sold_qty > 0 else repl_qty
+        proportion = (matched_qty / sold_qty) if sold_qty > 0 else 1.0
+        disallowed = round(abs(pl) * proportion, 2)
+        allowed = round(abs(pl) - disallowed, 2)  # still deductible
+
+        # Per-share cost-basis uplift on the matched replacement shares
+        basis_adj_per_share = round(disallowed / matched_qty, 4) if matched_qty > 0 else None
 
         wash_sales.append({
             "ticker": ticker,
             "asset_type": "Stock",
+            "direction": direction,
             "sale_date": exit_date,
             "raw_loss": pl,
             "disallowed_loss": disallowed,
+            "allowed_loss": -allowed,   # negative = remaining deductible loss
+            "sold_qty": sold_qty,
+            "matched_qty": matched_qty,
             "replacement_type": replacement["type"],
             "replacement_date": replacement["date"],
             "replacement_quantity": repl_qty,
@@ -463,15 +496,19 @@ def taxes_ui() -> None:
                 "Sale Date": ws["sale_date"].strftime("%Y-%m-%d"),
                 "Raw Loss": round(ws["raw_loss"], 2),
                 "Disallowed Loss": round(ws["disallowed_loss"], 2),
+                "Allowed Loss": round(ws.get("allowed_loss", ws["raw_loss"]), 2),
                 "Replacement Type": ws["replacement_type"],
                 "Replacement Date": ws["replacement_date"].strftime("%Y-%m-%d"),
+                "Sold Qty": ws.get("sold_qty", ""),
+                "Matched Qty": ws.get("matched_qty", ""),
+                "Direction": ws.get("direction", "N/A"),
                 "Term": ws["term"],
             })
         ws_df = pd.DataFrame(ws_rows)
 
         styled_ws = (
             ws_df.style
-            .map(color_profit_loss, subset=["Raw Loss"])
+            .map(color_profit_loss, subset=["Raw Loss", "Allowed Loss"])
             .map(_color_wash_sale, subset=["Disallowed Loss"])
         )
         st.dataframe(styled_ws, width="stretch", hide_index=True)
@@ -518,10 +555,12 @@ def taxes_ui() -> None:
 A loss from selling a security is **disallowed** if you *acquire* a substantially
 identical security within **30 days before or after** the sale.
 
-#### Stocks
+#### Stocks — Long & Short positions
 | Scenario | Wash Sale? |
 |---|---|
-| Sell stock at loss → buy same stock within 30 days | ✅ Yes |
+| Sell **long** stock at loss → buy same stock (Long) within 30 days | ✅ Yes |
+| Cover **short** stock at loss → open new short sell within 30 days | ✅ Yes |
+| Sell long at loss → short sell same stock (different direction) | ❌ No |
 | Sell stock at loss → buy different stock | ❌ No |
 | Sell stock at a **gain** → repurchase | ❌ No (only losses) |
 
@@ -535,6 +574,40 @@ an option you acquired — it does **not** trigger the rule.
 | Sell stock at loss → buy **long call** within 30 days | ✅ Yes (acquired option to buy) |
 | Sell stock at loss → buy **long put** within 30 days | ✅ Yes (acquired option) |
 | Close option at loss → buy substantially identical **long** option | ✅ Yes |
+| Sell stock at loss → **write a covered call** | ❌ No (sold an obligation) |
+| Sell stock at loss → **write a cash-secured put** | ❌ No (sold an obligation) |
+| Close option at loss → **write** a new CSP or covered call | ❌ No (sold, not acquired) |
+
+> **This tracker applies the correct rule:** only debit (long/bought) option opens
+> are treated as wash-sale replacement purchases. Written options (credit) are ignored.
+
+#### DCA (Dollar-Cost Averaging) positions
+Selling a DCA'd position at a loss **does not change the wash sale rules**.
+What matters is always the 30-day repurchase window, not how you built the position.
+
+| DCA Scenario | Wash Sale? |
+|---|---|
+| DCA into position → sell **entire** lot → **don't** repurchase within 30 days | ❌ No |
+| DCA into position → sell entire lot → **repurchase** within 30 days | ✅ Yes |
+| DCA into position → sell **partial** lot → rebuy within 30 days | ✅ Yes (proportional) |
+
+#### Proportional wash sale rule
+If you sold **N shares** at a loss but only repurchased **M shares** (M < N) within
+the window, only the fraction **M/N** of the loss is disallowed. The remaining loss
+on the (N − M) shares is **still deductible**.
+
+> This tracker calculates the disallowed amount proportionally using Sold Qty and
+> Matched Qty shown in the detail table.
+
+**The disallowed loss is not permanently lost.** It is added to the cost basis of the
+replacement security, deferring the loss until you eventually sell that replacement lot.
+
+> For actual tax filing, verify with your broker's 1099-B or tax software (TurboTax,
+> H\&R Block, etc.) which apply the rule on a per-share, FIFO basis with more granularity.
+> Also note: wash sales apply if a **spouse** or your **IRA/Roth IRA** buys within the window.
+            """)
+
+� buy substantially identical **long** option | ✅ Yes |
 | Sell stock at loss → **write a covered call** | ❌ No (sold an obligation) |
 | Sell stock at loss → **write a cash-secured put** | ❌ No (sold an obligation) |
 | Close option at loss → **write** a new CSP or covered call | ❌ No (sold, not acquired) |

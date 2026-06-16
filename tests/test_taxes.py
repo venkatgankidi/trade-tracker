@@ -27,17 +27,18 @@ def _make_pos(ticker, entry_date, exit_date, profit_loss, quantity=100):
     }
 
 
-def _make_trade(ticker, date_str, trade_type="buy", price=50.0, quantity=100):
+def _make_trade(ticker, date_str, trade_type="buy", price=50.0, quantity=100,
+                direction="Long"):
     """Build a minimal raw-trade dict (from the trades table)."""
     return {
-        "id": hash((ticker, date_str, trade_type)),
+        "id": hash((ticker, date_str, trade_type, direction)),
         "ticker": ticker,
         "date": date_str,
         "trade_type": trade_type,
         "price": price,
         "quantity": quantity,
         "platform_id": 1,
-        "direction": "Long",
+        "direction": direction,
     }
 
 
@@ -108,7 +109,7 @@ class TestWashSaleStockLoss:
         assert ws["ticker"] == "AAPL"
         assert ws["asset_type"] == "Stock"
         assert ws["disallowed_loss"] == pytest.approx(500.0)
-        assert ws["replacement_type"] == "Stock Buy"
+        assert ws["replacement_type"] == "Stock Buy (Long)"
 
     def test_replacement_buy_before_sale_triggers_wash(self):
         """Buy within 30 days BEFORE the loss sale → wash sale."""
@@ -357,3 +358,99 @@ class TestWashSaleYearAttribution:
         result = detect_wash_sales([], [closed_opt], [], [closed_opt, new_opt])
         assert len(result) == 1
         assert result[0]["year"] == 2023  # year of the close, not the replacement
+
+
+# ---------------------------------------------------------------------------
+# detect_wash_sales — direction awareness (Long vs Short)
+# ---------------------------------------------------------------------------
+
+class TestWashSaleDirection:
+
+    def test_long_loss_matched_by_long_buy(self):
+        """Long position loss is triggered by a Long buy (correct direction)."""
+        pos = _make_pos("AAPL", "2024-01-01", "2024-03-01", profit_loss=-500, direction="Long")
+        trade = _make_trade("AAPL", "2024-03-10", trade_type="buy", direction="Long")
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert len(result) == 1
+        assert result[0]["replacement_type"] == "Stock Buy (Long)"
+
+    def test_long_loss_not_triggered_by_short_cover(self):
+        """A buy-to-cover (Short direction) does NOT trigger a wash sale for a Long loss."""
+        pos = _make_pos("AAPL", "2024-01-01", "2024-03-01", profit_loss=-500, direction="Long")
+        # This buy is a short cover (direction=Short), not a new long purchase
+        trade = _make_trade("AAPL", "2024-03-10", trade_type="buy", direction="Short")
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert result == [], "Buy-to-cover should not trigger a wash sale for a long position loss"
+
+    def test_short_loss_triggered_by_new_short_sell(self):
+        """Short position loss is triggered by a new short sell-to-open."""
+        pos = _make_pos("TSLA", "2024-01-01", "2024-03-01", profit_loss=-800, direction="Short")
+        # New short sell-to-open within the window
+        trade = _make_trade("TSLA", "2024-03-10", trade_type="sell", direction="Short")
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert len(result) == 1
+        assert result[0]["replacement_type"] == "Short Sell (Open)"
+        assert result[0]["disallowed_loss"] == pytest.approx(800.0)
+
+    def test_short_loss_not_triggered_by_long_buy(self):
+        """A regular long buy does NOT trigger a wash sale for a Short position loss."""
+        pos = _make_pos("TSLA", "2024-01-01", "2024-03-01", profit_loss=-800, direction="Short")
+        trade = _make_trade("TSLA", "2024-03-10", trade_type="buy", direction="Long")
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert result == [], "Long buy should not trigger a wash sale for a short position loss"
+
+
+# ---------------------------------------------------------------------------
+# detect_wash_sales — proportional disallowance & DCA
+# ---------------------------------------------------------------------------
+
+class TestWashSaleProportional:
+
+    def test_full_repurchase_disallows_full_loss(self):
+        """Sell 100 shares, repurchase 100 → 100% of loss disallowed."""
+        pos = _make_pos("NVDA", "2024-01-01", "2024-03-01", profit_loss=-400, quantity=100)
+        trade = _make_trade("NVDA", "2024-03-10", quantity=100)
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert len(result) == 1
+        assert result[0]["disallowed_loss"] == pytest.approx(400.0)
+        assert result[0]["matched_qty"] == pytest.approx(100.0)
+
+    def test_partial_repurchase_proportional_disallowance(self):
+        """Sell 200 shares at a loss, repurchase only 100 → 50% of loss disallowed."""
+        pos = _make_pos("NVDA", "2024-01-01", "2024-03-01", profit_loss=-600, quantity=200)
+        trade = _make_trade("NVDA", "2024-03-10", quantity=100)  # only repurchased 100
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert len(result) == 1
+        ws = result[0]
+        assert ws["disallowed_loss"] == pytest.approx(300.0)   # 50% of $600
+        assert ws["allowed_loss"] == pytest.approx(-300.0)     # other 50% still deductible
+        assert ws["matched_qty"] == pytest.approx(100.0)
+        assert ws["sold_qty"] == pytest.approx(200.0)
+
+    def test_dca_sell_entire_lot_no_repurchase_no_wash(self):
+        """DCA into position, sell entire lot, NO repurchase within 30 days → no wash sale."""
+        pos = _make_pos("MSFT", "2024-01-01", "2024-03-01", profit_loss=-500, quantity=300)
+        # No buy within the window
+        result = detect_wash_sales([pos], [], [], [])
+        assert result == []
+
+    def test_dca_sell_entire_lot_repurchase_triggers_wash(self):
+        """DCA into position, sell entire lot, then repurchase AFTER sale → wash sale."""
+        pos = _make_pos("MSFT", "2024-01-01", "2024-03-01", profit_loss=-500, quantity=200)
+        # Repurchase after the full-lot sale
+        trade = _make_trade("MSFT", "2024-03-15", trade_type="buy", quantity=200)
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert len(result) == 1
+        assert result[0]["disallowed_loss"] == pytest.approx(500.0)
+
+    def test_repurchase_larger_than_sold_capped_at_sold_qty(self):
+        """Repurchase more shares than sold → disallowance capped at sold quantity."""
+        pos = _make_pos("AMD", "2024-01-01", "2024-03-01", profit_loss=-300, quantity=100)
+        # Bought 200 shares but only sold 100 → proportion = min(200, 100) / 100 = 1.0
+        trade = _make_trade("AMD", "2024-03-05", trade_type="buy", quantity=200)
+        result = detect_wash_sales([pos], [], [trade], [])
+        assert len(result) == 1
+        ws = result[0]
+        assert ws["disallowed_loss"] == pytest.approx(300.0)  # full loss disallowed
+        assert ws["matched_qty"] == pytest.approx(100.0)      # capped at sold qty
+        assert ws["basis_adj_per_share"] == pytest.approx(3.0)  # 300 / 100
