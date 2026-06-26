@@ -29,12 +29,18 @@ def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], dro
     return df[[c for c in cols if c in df.columns]]
 
 
-def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
+def calculate_unrealized_pnl(df: pd.DataFrame, legs_by_trade: Optional[Dict] = None) -> pd.DataFrame:
     """Calculate unrealized P&L for open option trades using real-time prices.
-    
+
+    For multi-leg strategies (spreads, condors, etc.), fetches each leg's
+    current market price independently and sums P&L across all legs.
+    For single-leg trades, uses the parent trade's strike/expiry/type.
+
     Args:
-        df: DataFrame with open option trades
-        
+        df: DataFrame with open option trades (must include 'id' column for multi-leg)
+        legs_by_trade: Optional dict mapping trade_id -> list of leg dicts.
+                       When provided, multi-leg trades use per-leg pricing.
+
     Returns:
         DataFrame with added columns: current_price, unrealized_pnl
     """
@@ -42,18 +48,80 @@ def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
         df['current_price'] = None
         df['unrealized_pnl'] = 0.0
         return df
-    
-    # Extract strategy type from strategy column (e.g., 'call' from 'cash secured put')
-    df['option_type'] = df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
-    
+
     # Ensure numeric columns are float type (handle Decimal from database)
     df['strike_price'] = pd.to_numeric(df['strike_price'], errors='coerce')
     df['option_open_price'] = pd.to_numeric(df['option_open_price'], errors='coerce')
-    
-    # Group by ticker for batch fetching
-    current_prices = {}
-    for ticker in df['ticker'].unique():
-        ticker_trades = df[df['ticker'] == ticker].to_dict('records')
+
+    # --- Multi-leg P&L via per-leg prices ---
+    multi_leg_pnl: Dict = {}  # trade_id -> unrealized_pnl
+
+    if legs_by_trade:
+        # Collect all legs across all multi-leg trades grouped by ticker
+        # so we can batch fetch option chains per ticker efficiently.
+        ticker_legs: Dict = {}  # ticker -> list of (trade_id, leg)
+        for trade_id, legs in legs_by_trade.items():
+            if not legs:
+                continue
+            # Find the ticker for this trade
+            trade_rows = df[df['id'] == trade_id]
+            if trade_rows.empty:
+                continue
+            ticker = trade_rows.iloc[0]['ticker']
+            qty = int(trade_rows.iloc[0].get('quantity', 1) or 1)
+            ticker_legs.setdefault(ticker, []).append((trade_id, qty, legs))
+
+        # Batch fetch prices per ticker
+        for ticker, trade_legs_list in ticker_legs.items():
+            # Build a flat list of unique (strike, expiry, type) combos to fetch
+            options_to_fetch = []
+            for _tid, _qty, legs in trade_legs_list:
+                for leg in legs:
+                    options_to_fetch.append({
+                        'strike': float(leg['strike_price']),
+                        'expiry': str(leg['expiry_date']),
+                        'type': leg['leg_type'].lower(),
+                    })
+
+            prices_df = get_batch_option_prices(ticker, options_to_fetch)
+            # Build lookup: (strike, expiry, type) -> current_price
+            leg_price_map: Dict = {}
+            for _, pr in prices_df.iterrows():
+                key = (float(pr['strike']), str(pr['expiry']), pr['type'])
+                leg_price_map[key] = pr.get('current_price')
+
+            # Compute P&L per trade
+            for trade_id, qty, legs in trade_legs_list:
+                pnl_total = 0.0
+                all_priced = True
+                for leg in legs:
+                    key = (float(leg['strike_price']), str(leg['expiry_date']), leg['leg_type'].lower())
+                    leg_current = leg_price_map.get(key)
+                    leg_open = float(leg.get('premium', 0) or 0)
+                    if leg_current is None:
+                        all_priced = False
+                        continue  # skip unpriced legs, sum what we can
+                    leg_current = float(leg_current)
+                    side = leg.get('side', 'sell').lower()
+                    if side == 'sell':
+                        # Sold this leg: profit if price declines
+                        pnl_total += (leg_open - leg_current) * 100 * qty
+                    else:
+                        # Bought this leg: profit if price rises
+                        pnl_total += (leg_current - leg_open) * 100 * qty
+                multi_leg_pnl[trade_id] = round(pnl_total, 2)
+
+    # --- Single-leg P&L via parent trade fields ---
+    # Extract strategy type from strategy column for single-leg trades
+    df['option_type'] = df['strategy'].apply(lambda x: 'call' if 'call' in str(x).lower() else 'put')
+
+    # Only fetch prices for trades NOT handled by multi-leg logic
+    single_leg_ids = set(df['id'].tolist()) - set(multi_leg_pnl.keys()) if 'id' in df.columns else set()
+    df_single = df[df['id'].isin(single_leg_ids)] if 'id' in df.columns else df
+
+    current_prices: Dict = {}
+    for ticker in df_single['ticker'].unique():
+        ticker_trades = df_single[df_single['ticker'] == ticker].to_dict('records')
         options_list = [
             {
                 'strike': float(t['strike_price']),
@@ -62,40 +130,39 @@ def calculate_unrealized_pnl(df: pd.DataFrame) -> pd.DataFrame:
             }
             for t in ticker_trades
         ]
-        
         prices_df = get_batch_option_prices(ticker, options_list)
         for _, row in prices_df.iterrows():
             key = (ticker, float(row['strike']), str(row['expiry']), row['type'])
             current_prices[key] = row.get('current_price')
-    
-    # Apply current prices and calculate unrealized P&L
+
+    # Apply current prices to single-leg rows
     df['current_price'] = df.apply(
         lambda row: current_prices.get(
             (row['ticker'], float(row['strike_price']), str(row['expiry_date']), row['option_type']),
             None
-        ),
+        ) if ('id' not in df.columns or row.get('id') in single_leg_ids) else None,
         axis=1
     )
-    
-    # Calculate unrealized P&L
+
+    # Calculate unrealized P&L — multi-leg overrides single-leg
     def calc_pnl(row):
+        trade_id = row.get('id')
+        # Multi-leg: use precomputed spread P&L
+        if trade_id in multi_leg_pnl:
+            return multi_leg_pnl[trade_id]
+        # Single-leg
         if row['current_price'] is None:
             return None
-        
         current_price = float(row['current_price'])
         open_price = float(row['option_open_price'])
         transaction_type = str(row['transaction_type']).lower()
-        
-        # For options, multiply by 100 (1 contract = 100 shares)
+        qty = int(row.get('quantity', 1) or 1)
         if transaction_type == 'credit':
-            # Sold the option: profit if it goes down
-            pnl = (open_price - current_price) * 100
+            pnl = (open_price - current_price) * 100 * qty
         else:
-            # Bought the option: profit if it goes up
-            pnl = (current_price - open_price) * 100
-        
+            pnl = (current_price - open_price) * 100 * qty
         return round(pnl, 2)
-    
+
     df['unrealized_pnl'] = df.apply(calc_pnl, axis=1)
     df = df.drop(columns=['option_type'], errors='ignore')
     return df
@@ -105,14 +172,16 @@ def get_option_trades_summary() -> pd.DataFrame:
     open_trades = load_option_trades(status="open")
     closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised") + load_option_trades(status="closed") + load_option_trades(status="assigned")
     total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
-    
-    # Calculate unrealized gains for open trades
+
+    # Calculate unrealized gains for open trades (including multi-leg spread support)
     total_unrealized_gains = 0.0
     if open_trades:
         df_open = pd.DataFrame(open_trades)
-        df_open = calculate_unrealized_pnl(df_open)
+        # Load legs so spread P&L is computed correctly per-leg
+        _, legs_by_trade = _build_legs_summary([t['id'] for t in open_trades])
+        df_open = calculate_unrealized_pnl(df_open, legs_by_trade=legs_by_trade)
         total_unrealized_gains = df_open['unrealized_pnl'].sum() if 'unrealized_pnl' in df_open.columns else 0.0
-    
+
     return pd.DataFrame([{
         "Open Option Trades": len(open_trades),
         "Closed Option Trades": len(closed_trades),
@@ -174,11 +243,16 @@ def option_trades_ui() -> None:
         df_open = None
         if open_trades:
             df_open = pd.DataFrame(open_trades)
-            
+
+            # Load legs first so spread P&L is computed per-leg
+            raw_open_for_legs = pd.DataFrame(open_trades)
+            trade_ids_for_legs = raw_open_for_legs['id'].tolist() if 'id' in raw_open_for_legs.columns else []
+            legs_summaries, legs_by_trade = _build_legs_summary(trade_ids_for_legs)
+
             # Calculate unrealized P&L with real-time prices (only once)
             with st.spinner("Fetching real-time option prices..."):
-                df_open = calculate_unrealized_pnl(df_open)
-            
+                df_open = calculate_unrealized_pnl(df_open, legs_by_trade=legs_by_trade)
+
             total_unrealized_pnl = df_open['unrealized_pnl'].sum() if 'unrealized_pnl' in df_open.columns else 0.0
         # Colorize unrealized P&L: green for positive, red for negative, black for zero
         color = "green" if total_unrealized_pnl > 0 else ("red" if total_unrealized_pnl < 0 else "black")
@@ -189,11 +263,9 @@ def option_trades_ui() -> None:
             from ui.option_strategies import get_strategy_level
             df_open['Option Level'] = df_open['strategy'].apply(lambda s: f"L{get_strategy_level(s)}")
 
-            # Add legs summary column for multi-leg trades
+            # Add legs summary column for multi-leg trades (legs already loaded above)
             if 'id' in pd.DataFrame(open_trades).columns:
                 raw_open = pd.DataFrame(open_trades)
-                trade_ids = raw_open['id'].tolist()
-                legs_summaries, legs_by_trade = _build_legs_summary(trade_ids)
                 df_open['legs'] = raw_open['id'].map(lambda tid: legs_summaries.get(tid, ""))
             
             df_open = _map_and_reorder_columns(

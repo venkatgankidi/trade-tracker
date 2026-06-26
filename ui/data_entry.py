@@ -44,7 +44,9 @@ def data_entry() -> None:
             platform_name = platform_map.get(trade.get("platform_id"), "Unknown")
             qty = trade.get('quantity', 1) or 1
             qty_str = f" x{qty}" if qty > 1 else ""
-            return f"{trade['id']} | {platform_name} | {trade['ticker']} | {trade['strategy'].title()}{qty_str}"
+            expiry = trade.get('expiry_date', '')
+            expiry_str = f" | Exp: {expiry}" if expiry else ""
+            return f"{trade['id']} | {platform_name} | {trade['ticker']} | {trade['strategy'].title()}{qty_str}{expiry_str}"
         trade_options = [(trade_label(t), t["id"]) for t in open_trades]
         selected = st.selectbox(
             "Select Option Trade to Close",
@@ -66,11 +68,12 @@ def data_entry() -> None:
                 st.write(f"**Ticker:** {trade['ticker']}")
                 st.write(f"**Strategy:** {trade['strategy'].title()}")
                 st.write(f"**Trade Date:** {trade['trade_date']}")
+                st.write(f"**Expiry Date:** {trade['expiry_date']}")
                 st.write(f"**Open Price (net per share):** {trade['option_open_price']}")
                 st.write(f"**Contracts:** {qty}")
                 if legs:
                     legs_str = " / ".join(
-                        f"{lg['side'].upper()[:1]}${float(lg['strike_price']):.0f}{lg['leg_type'].upper()[:1]} @{float(lg['premium']):.2f}"
+                        f"{lg['side'].upper()[:1]}${float(lg['strike_price']):.0f}{lg['leg_type'].upper()[:1]}@{float(lg['premium']):.2f} Exp:{lg['expiry_date']}"
                         for lg in legs
                     )
                     st.write(f"**Legs:** {legs_str}")
