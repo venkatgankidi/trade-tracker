@@ -1,6 +1,7 @@
 streamlit
 streamlit-authenticator
 psycopg2-binary
+psycopg[binary]
 pandas
 yfinance
 sqlalchemy
