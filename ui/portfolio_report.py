@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import yfinance as yf
-from db.db_utils import PLATFORM_CACHE, load_positions, load_option_trades
+from db.db_utils import PLATFORM_CACHE, load_positions, load_option_trades, register_cache
 from typing import Optional, List, Dict
 import altair as alt
 from ui.utils import color_profit_loss, get_platform_id_to_name_map
@@ -82,6 +82,10 @@ def _get_portfolio_df() -> pd.DataFrame:
         lambda r: (r["unrealized_gain"] / r["trade_cost"] * 100) if r["trade_cost"] else 0.0, axis=1
     )
     return summary
+
+
+register_cache("portfolio", _get_portfolio_df)
+
 
 def get_position_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for each platform (investment, value, unrealized gain).

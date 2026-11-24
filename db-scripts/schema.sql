@@ -89,60 +89,34 @@ CREATE TABLE IF NOT EXISTS cash_flows (
 );
 
 -- ============================================================================
--- OPTIMIZED INDEXES
+-- OPTIMIZED INDEXES (minimal set to reduce shared_buffers & vacuum memory
+-- overhead on low-memory PostgreSQL tiers such as Aiven Free Plan)
 -- ============================================================================
 
 -- TRADES TABLE INDEXES
--- Primary composite index for sync_positions_from_trades optimization
+-- Primary composite index for sync_positions_from_trades ORDER BY (ticker, platform_id, date, id)
 CREATE INDEX IF NOT EXISTS idx_trades_ticker_platform_date_id ON trades(ticker, platform_id, date, id);
-
--- Supporting indexes for various query patterns
-CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(date);
-CREATE INDEX IF NOT EXISTS idx_trades_platform_id ON trades(platform_id);
-
--- Note: idx_trades_ticker_platform from original schema is redundant with 
--- idx_trades_ticker_platform_date_id for most queries, so removed to avoid duplication
+-- Supports load_all_trades ORDER BY (date, id)
+CREATE INDEX IF NOT EXISTS idx_trades_date ON trades(date, id);
 
 -- POSITIONS TABLE INDEXES
--- Most frequently queried columns
-CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(position_status);
-CREATE INDEX IF NOT EXISTS idx_positions_platform_id ON positions(platform_id);
-
--- Composite indexes for common query patterns
+-- Supports sync_positions_from_trades DELETE WHERE ticker = ... AND platform_id = ...
 CREATE INDEX IF NOT EXISTS idx_positions_ticker_platform ON positions(ticker, platform_id);
-CREATE INDEX IF NOT EXISTS idx_positions_platform_status ON positions(platform_id, position_status);
-CREATE INDEX IF NOT EXISTS idx_positions_entry_date ON positions(entry_date);
-
--- Partial index for historical reports (only closed positions)
-CREATE INDEX IF NOT EXISTS idx_positions_exit_date ON positions(exit_date) WHERE position_status = 'close';
+-- Supports load_all_positions ORDER BY entry_date DESC
+CREATE INDEX IF NOT EXISTS idx_positions_entry_date ON positions(entry_date DESC);
 
 -- OPTION TRADES TABLE INDEXES
--- Single column indexes for basic filtering
+-- Supports optional status filtering
 CREATE INDEX IF NOT EXISTS idx_option_trades_status ON option_trades(status);
-CREATE INDEX IF NOT EXISTS idx_option_trades_platform_id ON option_trades(platform_id);
-CREATE INDEX IF NOT EXISTS idx_option_trades_expiry ON option_trades(expiry_date);
-CREATE INDEX IF NOT EXISTS idx_option_trades_trade_date ON option_trades(trade_date);
-
--- Composite indexes for common query patterns
-CREATE INDEX IF NOT EXISTS idx_option_trades_ticker_status ON option_trades(ticker, status);
-CREATE INDEX IF NOT EXISTS idx_option_trades_platform_status ON option_trades(platform_id, status);
-
--- Partial index for historical reports (only closed/expired trades)
-CREATE INDEX IF NOT EXISTS idx_option_trades_close_date ON option_trades(close_date) WHERE status IN ('closed', 'expired');
 
 -- OPTION TRADE LEGS TABLE INDEXES
-CREATE INDEX IF NOT EXISTS idx_option_trade_legs_trade_id ON option_trade_legs(option_trade_id);
+-- Supports FK lookups and ORDER BY option_trade_id, id
+CREATE INDEX IF NOT EXISTS idx_option_trade_legs_trade_id ON option_trade_legs(option_trade_id, id);
 
 -- CASH FLOWS TABLE INDEXES
--- Primary composite index for platform-specific cash flow queries
-CREATE INDEX IF NOT EXISTS idx_cash_flows_platform_date ON cash_flows(platform_id, flow_date);
+-- Supports load_cash_flows ORDER BY flow_date DESC and platform JOIN
+CREATE INDEX IF NOT EXISTS idx_cash_flows_date ON cash_flows(flow_date DESC);
+CREATE INDEX IF NOT EXISTS idx_cash_flows_platform_id ON cash_flows(platform_id);
 
--- Supporting index for date-based queries
-CREATE INDEX IF NOT EXISTS idx_cash_flows_date ON cash_flows(flow_date);
-
--- LOOKUP TABLE INDEXES
--- Index for platforms name lookups
-CREATE INDEX IF NOT EXISTS idx_platforms_name ON platforms(name);
-
--- Index for app_metadata key lookups
-CREATE INDEX IF NOT EXISTS idx_app_metadata_key ON app_metadata(key);
+-- Note: platforms(name) already has a UNIQUE index and app_metadata(key) already
+-- has a PRIMARY KEY index; duplicate indexes are intentionally omitted.

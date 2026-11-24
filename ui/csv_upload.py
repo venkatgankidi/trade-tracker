@@ -2,8 +2,7 @@ import streamlit as st
 import csv
 import json
 import io
-from db.db_utils import PLATFORM_CACHE, set_last_upload_time
-from sqlalchemy import text
+from db.db_utils import PLATFORM_CACHE, bulk_insert_trades, set_last_upload_time
 from typing import Optional, List, Dict, Any
 
 def upload_csv() -> None:
@@ -29,7 +28,6 @@ def upload_csv() -> None:
             return
         if st.button("Submit"):
             try:
-                conn = st.connection("postgresql", type="sql")
                 rows: List[Dict[str, Any]] = []
                 reader = csv.DictReader(io.StringIO(s))
                 for row in reader:
@@ -42,13 +40,7 @@ def upload_csv() -> None:
                 if not rows:
                     st.warning("No valid rows found in the uploaded file.")
                     return
-                for row in reversed(rows):
-                    columns = list(row.keys())
-                    placeholders = ", ".join([f":{col}" for col in columns])
-                    sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
-                    with conn.session as session:
-                        session.execute(sql, row)
-                        session.commit()
+                bulk_insert_trades(list(reversed(rows)))
                 st.success("Trades uploaded successfully!")
                 # Record the upload time (UTC)
                 try:

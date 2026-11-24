@@ -1,10 +1,11 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from db.db_utils import load_closed_positions, load_option_trades, PLATFORM_CACHE
+from db.db_utils import load_closed_positions, load_option_trades, PLATFORM_CACHE, register_cache
+from config import Config
 import datetime
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=Config.CACHE_TTL["reports"], show_spinner=False)
 def get_weekly_pl_stocks():
     """Aggregate weekly profit/loss for stocks from closed positions."""
     closed_positions = load_closed_positions()
@@ -19,10 +20,10 @@ def get_weekly_pl_stocks():
     weekly = weekly.rename(columns={"profit_loss": "Stock P/L"})
     return weekly
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=Config.CACHE_TTL["reports"], show_spinner=False)
 def get_weekly_pl_options():
     """Aggregate weekly profit/loss for options from closed option trades."""
-    closed_options = [t for t in load_option_trades() if t.get("status") in ("closed", "expired", "exercised")]
+    closed_options = load_option_trades(status=("closed", "expired", "exercised"))
     if not closed_options:
         return pd.DataFrame(columns=["Year", "Week", "Option P/L"])
     df = pd.DataFrame(closed_options)
@@ -34,6 +35,7 @@ def get_weekly_pl_options():
     weekly = weekly.rename(columns={"profit_loss": "Option P/L"})
     return weekly
 
+@st.cache_data(ttl=Config.CACHE_TTL["reports"], show_spinner=False)
 def get_monthly_pl_stocks():
     """Aggregate monthly profit/loss for stocks from closed positions."""
     closed_positions = load_closed_positions()
@@ -48,9 +50,10 @@ def get_monthly_pl_stocks():
     monthly = monthly.rename(columns={"profit_loss": "Stock P/L"})
     return monthly
 
+@st.cache_data(ttl=Config.CACHE_TTL["reports"], show_spinner=False)
 def get_monthly_pl_options():
     """Aggregate monthly profit/loss for options from closed option trades."""
-    closed_options = [t for t in load_option_trades() if t.get("status") in ("closed", "expired", "exercised")]
+    closed_options = load_option_trades(status=("closed", "expired", "exercised"))
     if not closed_options:
         return pd.DataFrame(columns=["Year", "Month", "Option P/L"])
     df = pd.DataFrame(closed_options)
@@ -61,6 +64,15 @@ def get_monthly_pl_options():
     monthly = df.groupby(["Year", "Month"], as_index=False)["profit_loss"].sum()
     monthly = monthly.rename(columns={"profit_loss": "Option P/L"})
     return monthly
+
+
+for _report_cache_fn in (
+    get_weekly_pl_stocks,
+    get_weekly_pl_options,
+    get_monthly_pl_stocks,
+    get_monthly_pl_options,
+):
+    register_cache("reports", _report_cache_fn)
 
 def weekly_monthly_pl_report_ui():
     st.title("📊 Weekly & Monthly P/L Report")

@@ -4,7 +4,7 @@ import datetime
 from datetime import timedelta
 import altair as alt
 from collections import defaultdict
-from db.db_utils import load_closed_positions, load_option_trades, load_all_trades
+from db.db_utils import load_closed_positions, load_option_trades, load_all_trades, register_cache
 from ui.utils import color_profit_loss
 
 LONG_TERM_TAX_RATE = 0.15
@@ -274,13 +274,14 @@ def aggregate_gains():
         wash_sales (list)      — raw wash-sale records from detect_wash_sales()
     """
     closed_positions = load_closed_positions()
-    closed_options = []
-    for status in ["expired", "exercised", "closed"]:
-        closed_options += load_option_trades(status=status)
 
-    # Full trade history needed for wash-sale detection
+    # Full trade history needed for wash-sale detection (single cached load for options)
     all_raw_trades = load_all_trades()
     all_option_trades = load_option_trades()  # all statuses
+    closed_options = [
+        t for t in all_option_trades
+        if t.get("status") in ("expired", "exercised", "closed")
+    ]
 
     yearly = {}
     yearly_breakdown = {}
@@ -356,6 +357,9 @@ def aggregate_gains():
         yearly[year]["wash_sale_disallowed"] += disallowed
 
     return yearly, yearly_breakdown, wash_sales
+
+
+register_cache("taxes", aggregate_gains)
 
 
 # ---------------------------------------------------------------------------

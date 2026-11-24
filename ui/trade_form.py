@@ -1,6 +1,5 @@
 import streamlit as st
-from db.db_utils import PLATFORM_CACHE, load_platforms
-from sqlalchemy import text
+from db.db_utils import PLATFORM_CACHE, load_platforms, insert_trade
 from typing import Optional
 
 # Default values for the form fields
@@ -69,13 +68,15 @@ def trade_form() -> None:
                 "direction": direction,
             }
             try:
-                conn = st.connection("postgresql", type="sql")
-                columns = list(trade_data.keys())
-                placeholders = ", ".join([f":{col}" for col in columns])
-                sql = text(f"INSERT INTO trades ({', '.join(columns)}) VALUES ({placeholders})")
-                with conn.session as session:
-                    session.execute(sql, trade_data)
-                    session.commit()
+                insert_trade(
+                    ticker=trade_data["ticker"],
+                    platform_id=trade_data["platform_id"],
+                    price=trade_data["price"],
+                    quantity=trade_data["quantity"],
+                    date=trade_data["date"],
+                    trade_type=trade_data["trade_type"],
+                    direction=trade_data["direction"],
+                )
                 st.success("Trade added successfully!")
                 # Reset form values to defaults by deleting keys
                 for key in defaults.keys():

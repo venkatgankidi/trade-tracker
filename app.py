@@ -1,9 +1,17 @@
 import streamlit as st
 from collections.abc import Mapping
+from sqlalchemy.pool import NullPool
+from config import Config
 from db.db_utils import load_platforms
 
-# Global connection pool for better performance
-CONNECTION_POOL = st.connection("postgresql", type="sql", ttl=3600)
+# Use NullPool + session memory/timeout guardrails so connections close immediately
+# after each query/transaction (no paid PgBouncer required on Aiven Free Tier).
+CONNECTION_POOL = st.connection(
+    "postgresql",
+    type="sql",
+    poolclass=NullPool,
+    connect_args=Config.DB_CONNECT_ARGS,
+)
 from ui.positions_ui import positions_ui
 from ui.option_trades_ui import option_trades_ui
 from ui.portfolio_report import portfolio_ui

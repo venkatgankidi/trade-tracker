@@ -6,7 +6,13 @@ from ui.taxes_ui import tax_summary
 import altair as alt
 import pandas as pd
 import yfinance as yf
-from db.db_utils import PLATFORM_CACHE, load_option_trades, get_total_cash_by_platform, get_platform_cash_available_map
+from db.db_utils import (
+    PLATFORM_CACHE,
+    load_option_trades,
+    get_total_cash_by_platform,
+    get_platform_cash_available_map,
+    register_cache,
+)
 from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_batch_option_prices, get_platform_option_exposure, get_options_cost_basis, get_options_portfolio_value
 from typing import Dict, Tuple, List
 
@@ -127,6 +133,8 @@ def get_dashboard_position_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for each platform (investment, value, unrealized gain).
     Includes both equities and options. This is dashboard-specific; portfolio_report shows equities only."""
     portfolio_df = _get_portfolio_df()
+    open_opts = load_option_trades(status="open")
+    platform_map = get_platform_id_to_name_map()
     rows = []
     for platform in PLATFORM_CACHE.keys():
         # Get equity investment (cost basis) from stocks and ETFs
@@ -137,11 +145,9 @@ def get_dashboard_position_summary() -> pd.DataFrame:
         equity_portfolio_value = equity_group["current_value"].sum() if not equity_group.empty else 0.0
         
         # Get options cost basis for this platform
-        open_opts = load_option_trades(status="open")
         options_cost_basis = 0.0
         options_portfolio_value = 0.0
         if open_opts:
-            platform_map = get_platform_id_to_name_map()
             platform_opts = [opt for opt in open_opts if platform_map.get(opt.get("platform_id")) == platform]
             if platform_opts:
                 # Get cost basis (what you paid)
@@ -231,6 +237,18 @@ def get_total_investment_for_cashflow() -> pd.DataFrame:
     
     result_df = pd.DataFrame(rows)
     return result_df.sort_values("Platform").reset_index(drop=True)
+
+
+for _dash_cache_fn in (
+    load_dashboard_data,
+    compute_asset_allocation,
+    get_total_portfolio_value_by_platform,
+    get_dashboard_position_summary,
+    get_dashboard_position_summary_with_total,
+    get_total_investment_for_cashflow,
+):
+    register_cache("dashboard", _dash_cache_fn)
+
 
 def dashboard():
     st.header("📊 Dashboard")

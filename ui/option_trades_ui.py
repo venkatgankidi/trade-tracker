@@ -4,7 +4,14 @@ import datetime
 import pandas as pd
 from typing import Optional, List, Dict
 import altair as alt
-from ui.utils import get_platform_id_to_name_map, color_profit_loss, get_option_price, get_batch_option_prices
+from ui.utils import (
+    get_platform_id_to_name_map,
+    color_profit_loss,
+    get_option_price,
+    get_option_chain,
+    get_option_chain_for_ticker,
+    get_batch_option_prices,
+)
 
 def _map_and_reorder_columns(df: pd.DataFrame, platform_map: Dict[int, str], drop_cols: List[str], move_cols: List[str]) -> pd.DataFrame:
     """Map platform_id to name, drop and reorder columns as needed."""
@@ -170,7 +177,7 @@ def calculate_unrealized_pnl(df: pd.DataFrame, legs_by_trade: Optional[Dict] = N
 def get_option_trades_summary() -> pd.DataFrame:
     """Returns a summary DataFrame for option trades (open/closed count and total P/L, plus unrealized gains)."""
     open_trades = load_option_trades(status="open")
-    closed_trades = load_option_trades(status="expired") + load_option_trades(status="exercised") + load_option_trades(status="closed") + load_option_trades(status="assigned")
+    closed_trades = load_option_trades(status=("expired", "exercised", "closed", "assigned"))
     total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
 
     # Calculate unrealized gains for open trades (including multi-leg spread support)
@@ -218,21 +225,17 @@ def option_trades_ui() -> None:
     """Streamlit UI for viewing option trades. No data entry or closing form here."""
     st.title("📈 Option Trades")
     platform_map = get_platform_id_to_name_map()
-    # Manual refresh control for option chains (clears relevant cached data)
+    # Manual refresh control for option chains (clears only option-chain caches, not DB caches)
     if st.button("🔄 Refresh Option Chains"):
-        # Clears all st.cache_data caches (including option chains) to force fresh fetches
-        st.cache_data.clear()
+        for cache_fn in (get_option_chain_for_ticker, get_option_chain, get_option_price):
+            if hasattr(cache_fn, "clear"):
+                cache_fn.clear()
         st.success("Option chain cache cleared — refreshing data...")
         st.rerun()
 
     with st.spinner("Loading option trades..."):
         # Calculate closed trades total P/L
-        closed_trades = (
-            load_option_trades(status="expired") +
-            load_option_trades(status="exercised") +
-            load_option_trades(status="closed") + 
-            load_option_trades(status="assigned")
-        )
+        closed_trades = load_option_trades(status=("expired", "exercised", "closed", "assigned"))
         total_pnl = sum(t.get("profit_loss", 0.0) or 0.0 for t in closed_trades)
         color = "green" if total_pnl > 0 else ("red" if total_pnl < 0 else "black")
         st.markdown(f"**💰 Total Profit/Loss (Closed Option Trades):** <span style='color:{color}'>{total_pnl:.2f}</span>", unsafe_allow_html=True)
@@ -306,12 +309,6 @@ def option_trades_ui() -> None:
         else:
             st.info("No open option trades.")
         st.header("🔴 Closed Option Trades")
-        closed_trades = (
-            load_option_trades(status="expired") +
-            load_option_trades(status="exercised") +
-            load_option_trades(status="closed") +
-            load_option_trades(status="assigned")
-        )
         if closed_trades:
             df_closed = pd.DataFrame(closed_trades)
             from ui.option_strategies import get_strategy_level
